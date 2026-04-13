@@ -413,23 +413,18 @@
     </select>
 
     <label>Model</label>
-    <select id="modelSelect" style="max-width:220px;">
-      <optgroup label="Qwen — free ★ recommended">
-        <option value="qwen/qwen3.6-plus:free">Qwen 3.6 Plus (free) ★</option>
-        <option value="qwen/qwen3.6-plus-preview:free">Qwen 3.6 Plus Preview (free)</option>
-        <option value="qwen/qwen3-235b-a22b:free">Qwen3 235B-A22B (free)</option>
-        <option value="qwen/qwen3-30b-a3b:free">Qwen3 30B-A3B (free)</option>
+    <select id="modelSelect" style="max-width:200px;">
+      <optgroup label="Qwen (recommended)">
         <option value="qwen/qwen3-14b:free">Qwen3 14B (free)</option>
+        <option value="qwen/qwen3-30b-a3b:free">Qwen3 30B-A3B (free)</option>
         <option value="qwen/qwen3-8b:free">Qwen3 8B (free)</option>
-        <option value="qwen/qwen2.5-72b-instruct:free">Qwen 2.5 72B (free)</option>
-        <option value="qwen/qwen2.5-7b-instruct:free">Qwen 2.5 7B (free)</option>
+        <option value="qwen/qwen-2.5-72b-instruct">Qwen 2.5 72B Instruct</option>
+        <option value="qwen/qwen-2.5-7b-instruct:free">Qwen 2.5 7B (free)</option>
       </optgroup>
       <optgroup label="Other free models">
-        <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B (free)</option>
         <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 8B (free)</option>
         <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (free)</option>
         <option value="google/gemma-3-12b-it:free">Gemma 3 12B (free)</option>
-        <option value="microsoft/phi-4-reasoning:free">Phi-4 Reasoning (free)</option>
       </optgroup>
       <optgroup label="LM Studio" id="lmsGroup" style="display:none">
         <option value="local-model">Auto-detect loaded model</option>
@@ -440,7 +435,7 @@
     <input id="apiKeyInput" type="password" placeholder="sk-or-v1-…" oninput="checkApiKey()" style="width:210px;">
     <input id="lmsUrlInput" type="text" placeholder="http://localhost:1234" value="http://localhost:1234" style="display:none;width:190px;">
 
-    <div id="apiStatus" title="Check openrouter.ai/models for current free model IDs">Not set</div>
+    <div id="apiStatus">Not set</div>
     <button class="btn" onclick="testConnection()" style="font-size:.63rem;">Test ↗</button>
     <div style="flex:1"></div>
     <button class="btn" onclick="openModal('csv')" style="font-size:.62rem;">⬆ CSV</button>
@@ -627,7 +622,7 @@ function onBackendChange() {
   document.getElementById('lmsGroup').style.display     = lms ? '' : 'none';
   if (lms) document.getElementById('modelSelect').value = 'local-model';
   else if (document.getElementById('modelSelect').value === 'local-model')
-    document.getElementById('modelSelect').value = 'qwen/qwen3.6-plus:free';
+    document.getElementById('modelSelect').value = 'qwen/qwen3-14b:free';
   checkApiKey();
 }
 

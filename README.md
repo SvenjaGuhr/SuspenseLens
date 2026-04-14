@@ -1,11 +1,7 @@
 # SuspenseLens 🔍
 **A browser-based tool for theory-driven suspense annotation of literary texts**
 
-SuspenseLens lets you load any short story, run it through a local AI model, and receive sentence-level suspense annotations from four distinct theoretical perspectives — displayed as a colour-coded heatmap with CATMA-style underlines, directly in your browser. No server, no subscription, no data leaves your computer.
-
-
-<--! # SuspenseLens
-Website for short story suspense level exploration filtered by different literary suspense theories to allow a multi-perspective approach to literary suspense in US-American and British short stories from the Gutenberg collection. -->
+SuspenseLens lets you load any short story, run it through a local AI model, and receive sentence-level suspense annotations from four distinct theoretical perspectives — displayed as a colour-coded heatmap with colored underlines to indicate the theory, directly in your browser. No server, no subscription, no data leaves your computer.
 
 ---
 

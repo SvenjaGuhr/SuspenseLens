@@ -473,13 +473,6 @@
 
   <div id="progressBar"><div id="progressFill"></div><div id="progressLabel"></div></div>
 
-  <!-- CORS warning — only shown when opened as file:// -->
-  <div id="corsWarning" style="display:none;background:rgba(250,204,21,.12);border-bottom:1px solid rgba(250,204,21,.3);padding:6px 20px;font-family:'JetBrains Mono',monospace;font-size:.65rem;color:#facc15;flex-shrink:0;">
-    ⚠ Opened as <strong>file://</strong> — browsers block API calls from local files. 
-    Serve with: <strong>python3 -m http.server 8080</strong> then open <strong>http://localhost:8080/SuspenseLens.html</strong>
-    &nbsp;<span onclick="document.getElementById('corsWarning').style.display='none'" style="cursor:pointer;opacity:.6">✕</span>
-  </div>
-
   <div id="statsBar">
     <div class="stat-item">Sentences: <strong id="statSent">0</strong></div>
     <div class="stat-item">Annotated: <strong id="statAnnot">0</strong></div>
@@ -676,71 +669,16 @@ function checkApiKey() {
 
 async function testConnection() {
   const st = document.getElementById('apiStatus');
-  const key = document.getElementById('apiKeyInput').value.trim();
-  const model = getActiveModel();
-  const backend = document.getElementById('backendSelect').value;
-
-  if (backend !== 'lmstudio' && !key) {
-    st.textContent = 'No API key'; st.className = 'error'; return;
-  }
-  if (backend !== 'lmstudio' && !model) {
-    st.textContent = 'No model ID'; st.className = 'error'; return;
-  }
-
   st.textContent = 'Testing…'; st.className = 'loading';
-
-  // First: check key validity via the /auth/key endpoint (no model needed)
-  if (backend !== 'lmstudio') {
-    try {
-      const authResp = await fetch('https://openrouter.ai/api/v1/auth/key', {
-        headers: { 'Authorization': 'Bearer ' + key }
-      });
-      if (!authResp.ok) {
-        const e = await authResp.json().catch(() => ({}));
-        st.textContent = 'Key invalid: ' + (e.error?.message || authResp.status);
-        st.className = 'error';
-        showDebug('AUTH CHECK FAILED', { status: authResp.status, body: e });
-        return;
-      }
-      const authData = await authResp.json();
-      showDebug('AUTH CHECK OK', authData);
-    } catch(e) {
-      st.textContent = 'Network error: ' + e.message.substring(0,40);
-      st.className = 'error';
-      showDebug('NETWORK ERROR (possible CORS)', { message: e.message, hint: 'Try opening this file via a local web server instead of file://' });
-      return;
-    }
-  }
-
-  // Second: test a minimal chat completion
   try {
-    const txt = await callLLM('Reply with exactly the word: OK', 'You are a test assistant. Reply with only: OK', 8);
-    if (txt && txt.trim().length > 0) {
-      st.textContent = '✓ Connected · ' + model.split('/').pop().substring(0,20);
-      st.className = 'ok';
-      showDebug('COMPLETION TEST OK', { response: txt });
-    } else {
-      st.textContent = 'Empty response';
-      st.className = 'error';
-      showDebug('COMPLETION TEST: empty response', {});
-    }
+    const txt = await callLLM('Reply with exactly: OK', 'You are a test assistant.', 10);
+    st.textContent = txt ? '✓ Connected' : 'No response';
+    st.className   = txt ? 'ok' : 'error';
   } catch(e) {
-    st.textContent = 'Error: ' + e.message.substring(0,45);
+    st.textContent = 'Failed: ' + e.message.substring(0,40);
     st.className = 'error';
-    showDebug('COMPLETION TEST FAILED', { error: e.message });
+    console.error(e);
   }
-}
-
-function showDebug(title, data) {
-  let panel = document.getElementById('debugPanel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'debugPanel';
-    panel.style.cssText = 'position:fixed;bottom:60px;right:16px;width:420px;max-height:260px;overflow-y:auto;background:#0a0a10;border:1px solid #f87171;border-radius:8px;padding:12px 14px;z-index:500;font-family:"JetBrains Mono",monospace;font-size:.65rem;color:#e8e6f0;box-shadow:0 8px 32px rgba(0,0,0,.8)';
-    document.body.appendChild(panel);
-  }
-  const ts = new Date().toLocaleTimeString();
-  panel.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:#f87171;font-weight:600">' + title + '</span><span style="color:#7a788e">' + ts + ' <span onclick="document.getElementById(\'debugPanel\').remove()" style="cursor:pointer;color:#f87171;margin-left:8px">✕</span></span></div><pre style="white-space:pre-wrap;color:#a0e8b0;margin:0">' + JSON.stringify(data, null, 2).substring(0, 1200) + '</pre>';
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -769,13 +707,11 @@ async function callLLM(userMsg, systemMsg, maxTokens) {
     headers = {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + key,
-      'HTTP-Referer': window.location.href || 'https://suspenselens.local',
+      'HTTP-Referer': 'https://suspenselens.app',
       'X-Title': 'SuspenseLens'
     };
     bodyObj = {
-      model,
-      max_tokens: maxTokens,
-      temperature: 0.1,
+      model, max_tokens: maxTokens, temperature: 0.1,
       messages: [{ role: 'system', content: systemMsg }, { role: 'user', content: userMsg }]
     };
   }
@@ -783,14 +719,10 @@ async function callLLM(userMsg, systemMsg, maxTokens) {
   const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(bodyObj) });
   if (!resp.ok) {
     const errBody = await resp.json().catch(() => ({}));
-    const msg = errBody?.error?.message || JSON.stringify(errBody);
-    showDebug('API ERROR ' + resp.status, { model, status: resp.status, error: msg });
-    throw new Error('HTTP ' + resp.status + ': ' + msg.substring(0, 100));
+    throw new Error('HTTP ' + resp.status + ': ' + JSON.stringify(errBody).substring(0, 120));
   }
   const data = await resp.json();
-  const content = data.choices?.[0]?.message?.content || null;
-  if (!content) showDebug('WARNING: empty content in response', data);
-  return content;
+  return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || null;
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1527,10 +1459,6 @@ const DEMO_CSV = `Sentence_ID,Sentence,reader_suspense_level (0 = default; 1-5),
 137,"Millionaire models remarked Alan, are rare enough; but, by Jove, model millionaires are rarer still!",0,0,,,,`;
 
 window.addEventListener('DOMContentLoaded', () => {
-  // Show CORS warning if opened directly as a file
-  if (window.location.protocol === 'file:') {
-    document.getElementById('corsWarning').style.display = 'block';
-  }
   importAnnotationCSV(DEMO_CSV);
 });
 </script>

@@ -6,7 +6,7 @@
 <title>SuspenseLens Evaluation</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
 :root {
   --bg:        #0f0f13; --surface:  #16161d; --surface2: #1e1e28;
@@ -21,7 +21,7 @@
   --r: 8px; --tr: .18s cubic-bezier(.4,0,.2,1);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Source Serif 4',serif;overflow:hidden}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Source Serif 4',serif;overflow:hidden;-webkit-overflow-scrolling:touch}
 #app{display:flex;height:100vh;flex-direction:column;overflow:hidden}
 
 /* ---- TOPBAR ---- */
@@ -345,6 +345,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Source
 </div>
 
 <script>
+// =====================================================================
+// ENTRY POINT — wait for DOM + D3 to be ready (required for GitHub Pages)
+// =====================================================================
+function initApp() {
 // =====================================================================
 // STATE
 // =====================================================================
@@ -1100,8 +1104,42 @@ const DATA=${JSON.stringify(chartData)};
   a.download = 'SuspenseLensEval_chart.html'; a.click();
 }
 
-// Resize chart on window resize
-window.addEventListener('resize', ()=>{ if(currentTab==='chart'&&compared) renderChart2(); });
+  // Resize chart on window resize
+  window.addEventListener('resize', ()=>{ if(currentTab==='chart'&&compared) renderChart2(); });
+
+  // Expose functions used by inline HTML event handlers to global scope
+  window.setTab          = setTab;
+  window.openModal       = openModal;
+  window.closeModal      = closeModal;
+  window.closeModalOuter = closeModalOuter;
+  window.handleFile      = handleFile;
+  window.confirmModal    = confirmModal;
+  window.runComparison   = runComparison;
+  window.renderReader    = renderReader;
+  window.renderTable     = renderTable;
+  window.renderChart2    = renderChart2;
+  window.exportEvalCSV   = exportEvalCSV;
+  window.exportChart2PNG = exportChart2PNG;
+  window.exportChart2HTML= exportChart2HTML;
+
+} // end initApp()
+
+// =====================================================================
+// BOOTSTRAP — ensure D3 is loaded before initialising
+// =====================================================================
+function _bootstrap() {
+  if (typeof d3 === 'undefined') {
+    // D3 not yet available (race on GitHub Pages CDN) — retry
+    setTimeout(_bootstrap, 50);
+    return;
+  }
+  initApp();
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _bootstrap);
+} else {
+  _bootstrap();
+}
 </script>
 </body>
 </html>

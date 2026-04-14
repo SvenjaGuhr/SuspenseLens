@@ -193,11 +193,13 @@ If you have a CSV annotation file in the project scheme format (columns: `Senten
 If you use SuspenseLens in your research, please cite:
 
 ```
-[your citation here]
+Guhr, Svenja. 2026. SuspenseLens. GitHub Repository. https://github.com/SvenjaGuhr/SuspenseLens.
 ```
 
 ---
 
-## License
+## AI-use Declaration
 
-[your license here]
+The code has been developed supported by Anthropic's Sonnet 4.6 model in the Claude.ai user interface.
+
+Last update: 2026-04-13, 08:50 PM

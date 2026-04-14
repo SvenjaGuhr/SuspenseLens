@@ -425,45 +425,46 @@
   <div id="apiBar">
     <label>Backend</label>
     <select id="backendSelect" onchange="onBackendChange()">
-      <option value="lmstudio">LM Studio (local) ★</option>
-      <option value="openrouter">OpenRouter (API key)</option>
+      <option value="openrouter">OpenRouter</option>
+      <option value="lmstudio">LM Studio (local)</option>
     </select>
 
     <label>Model</label>
     <select id="modelSelect" style="max-width:190px;" onchange="onModelSelectChange()">
-      <optgroup label="LM Studio" id="lmsGroup">
-        <option value="local-model">Auto-detect loaded model</option>
-      </optgroup>
-      <optgroup label="OpenRouter — Qwen free" id="orGroup" style="display:none">
-        <option value="__custom__">✏ Paste model ID…</option>
-        <option value="qwen/qwen3-coder:free">Qwen3 Coder 480B (free)</option>
+      <option value="__custom__">✏ Paste custom ID below…</option>
+      <optgroup label="Qwen — confirmed free">
+        <option value="qwen/qwen3-coder:free">Qwen3 Coder 480B (free) ★</option>
         <option value="qwen/qwen3-next-80b-a3b:free">Qwen3 Next 80B A3B (free)</option>
         <option value="qwen/qwen3.6-plus:free">Qwen3.6 Plus (free)</option>
+        <option value="qwen/qwen3.6-plus-preview:free">Qwen3.6 Plus Preview (free)</option>
         <option value="qwen/qwen3-235b-a22b:free">Qwen3 235B-A22B (free)</option>
-        <option value="openrouter/free">openrouter/free (auto)</option>
+        <option value="qwen/qwen3-30b-a3b:free">Qwen3 30B-A3B (free)</option>
+        <option value="qwen/qwen3-14b:free">Qwen3 14B (free)</option>
+        <option value="qwen/qwen3-8b:free">Qwen3 8B (free)</option>
+        <option value="qwen/qwen2.5-72b-instruct:free">Qwen 2.5 72B (free)</option>
+      </optgroup>
+      <optgroup label="Other free models">
+        <option value="openrouter/free">openrouter/free (auto-route)</option>
         <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B (free)</option>
         <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (free)</option>
+        <option value="google/gemma-3-12b-it:free">Gemma 3 12B (free)</option>
+        <option value="microsoft/phi-4-reasoning:free">Phi-4 Reasoning (free)</option>
+      </optgroup>
+      <optgroup label="LM Studio" id="lmsGroup" style="display:none">
+        <option value="local-model">Auto-detect loaded model</option>
       </optgroup>
     </select>
+    <!-- Custom model ID — shown when "Paste custom ID" is selected, or always visible as helper -->
     <input id="customModelInput" type="text" placeholder="e.g. qwen/qwen3-coder:free"
       oninput="onCustomModelInput()"
-      style="width:180px;display:none;background:var(--surface2);border:1px solid var(--accent);border-radius:6px;padding:4px 8px;font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text);outline:none;">
+      style="width:190px;display:none;background:var(--surface2);border:1px solid var(--accent);border-radius:6px;padding:4px 8px;font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text);outline:none;"
+      title="Paste any model ID from openrouter.ai/models — click the copy icon next to the model name">
 
-    <!-- LM Studio fields -->
-    <div id="lmsFields" style="display:flex;align-items:center;gap:6px;">
-      <label>Server URL</label>
-      <input id="lmsUrlInput" type="text" value="http://localhost:1234"
-        style="width:180px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text);outline:none;">
-      <button class="btn" onclick="openLMSGuide()" style="font-size:.62rem;border-color:hsl(160,65%,40%);color:hsl(160,65%,60%);">📖 Setup Guide</button>
-    </div>
+    <label id="apiKeyLabel">API Key</label>
+    <input id="apiKeyInput" type="password" placeholder="sk-or-v1-…" oninput="checkApiKey()" style="width:210px;">
+    <input id="lmsUrlInput" type="text" placeholder="http://localhost:1234" value="http://localhost:1234" style="display:none;width:190px;">
 
-    <!-- OpenRouter fields -->
-    <div id="orFields" style="display:none;align-items:center;gap:6px;">
-      <label id="apiKeyLabel">API Key</label>
-      <input id="apiKeyInput" type="password" placeholder="sk-or-v1-…" oninput="checkApiKey()" style="width:200px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text);outline:none;">
-    </div>
-
-    <div id="apiStatus">Not set</div>
+    <div id="apiStatus" title="Check openrouter.ai/models for current free model IDs">Not set</div>
     <button class="btn" onclick="testConnection()" style="font-size:.63rem;">Test ↗</button>
     <div style="flex:1"></div>
     <button class="btn" onclick="openModal('csv')" style="font-size:.62rem;">⬆ CSV</button>
@@ -522,48 +523,6 @@
       <button class="btn file-btn" onclick="document.getElementById('fileInput').click()">📁 Load from file</button>
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn primary" onclick="confirmModal()">Confirm</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════ LM STUDIO SETUP GUIDE MODAL ══════════ -->
-<div id="lmsGuideOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:400;align-items:center;justify-content:center;backdrop-filter:blur(3px);">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:32px;width:620px;max-width:96vw;max-height:88vh;overflow-y:auto;" onclick="event.stopPropagation()">
-    <h2 style="font-family:'Playfair Display',serif;font-size:1.3rem;margin-bottom:6px;">LM Studio Setup Guide</h2>
-    <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:20px;line-height:1.6;">Run a local model completely free — no API key, no internet needed. Three steps.</p>
-    <div style="display:flex;flex-direction:column;gap:16px;">
-      <div style="background:var(--surface2);border-radius:8px;padding:16px;border-left:3px solid hsl(160,65%,50%);">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:hsl(160,65%,60%);margin-bottom:8px;">STEP 1 — Download &amp; install LM Studio</div>
-        <div style="font-size:.82rem;line-height:1.7;">Download for free from <strong>lmstudio.ai</strong> (Mac / Windows / Linux). Install and open it.</div>
-      </div>
-      <div style="background:var(--surface2);border-radius:8px;padding:16px;border-left:3px solid hsl(210,70%,60%);">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:hsl(210,70%,65%);margin-bottom:8px;">STEP 2 — Download a model &amp; start the server with CORS enabled</div>
-        <div style="font-size:.82rem;line-height:1.7;margin-bottom:10px;">In LM Studio → <strong>Discover</strong> tab, search for and download one of these (pick by available RAM):</div>
-        <div style="background:var(--surface3);border-radius:6px;padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:.72rem;line-height:2;color:var(--text);">
-          <span style="color:hsl(160,65%,60%)">★ Best quality</span>  Qwen3-14B-Instruct-Q4   ~9 GB RAM<br>
-          <span style="color:hsl(210,70%,65%)">★ Balanced    </span>  Qwen3-8B-Instruct-Q4    ~5 GB RAM<br>
-          <span style="color:hsl(30,80%,60%)"> ★ Low RAM     </span>  Qwen3-4B-Instruct-Q4    ~3 GB RAM<br>
-          <span style="color:var(--text-muted)">  Also works   </span>  Llama-3.2-3B, Mistral-7B, Phi-4-mini
-        </div>
-        <div style="font-size:.82rem;line-height:1.8;margin-top:12px;">
-          Then go to the <strong>Developer</strong> tab (left sidebar):<br>
-          1. Click <strong>Start Server</strong><br>
-          2. Find the toggle <strong>"Allow cross-origin requests (CORS)"</strong> → turn it <strong style="color:#4ade80">ON</strong> ← this is essential!<br>
-          3. Server URL should show <code style="background:var(--surface3);padding:1px 5px;border-radius:3px;font-size:.7rem">http://localhost:1234</code>
-        </div>
-      </div>
-      <div style="background:var(--surface2);border-radius:8px;padding:16px;border-left:3px solid hsl(310,60%,60%);">
-        <div style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:hsl(310,60%,65%);margin-bottom:8px;">STEP 3 — Open SuspenseLens correctly &amp; connect</div>
-        <div style="font-size:.82rem;line-height:1.8;">
-          ⚠ <strong>Do not double-click the HTML file</strong> — open a Terminal in the same folder and run:<br>
-          <code style="display:block;margin:6px 0;background:var(--surface3);padding:8px 12px;border-radius:4px;color:#4ade80;font-size:.75rem">python3 -m http.server 8080</code>
-          Then open <code style="background:var(--surface3);padding:2px 6px;border-radius:3px;font-size:.72rem;color:#4ade80">http://localhost:8080/SuspenseLens.html</code> in your browser.<br><br>
-          Back in SuspenseLens: Backend = <strong>LM Studio</strong> · URL = <strong>http://localhost:1234</strong> · click <strong>Test ↗</strong>
-        </div>
-      </div>
-    </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:20px;">
-      <button class="btn primary" onclick="closeLMSGuide()">Got it ✓</button>
     </div>
   </div>
 </div>
@@ -667,26 +626,18 @@ const FEW_SHOT = {
 // ══════════════════════════════════════════════════════════════════════
 function onBackendChange() {
   const lms = document.getElementById('backendSelect').value === 'lmstudio';
-  document.getElementById('lmsFields').style.display = lms ? 'flex' : 'none';
-  document.getElementById('orFields').style.display  = lms ? 'none' : 'flex';
-  document.getElementById('lmsGroup').style.display  = lms ? '' : 'none';
-  document.getElementById('orGroup').style.display   = lms ? 'none' : '';
+  document.getElementById('apiKeyInput').style.display = lms ? 'none' : '';
+  document.getElementById('lmsUrlInput').style.display = lms ? '' : 'none';
+  document.getElementById('apiKeyLabel').textContent   = lms ? 'Base URL' : 'API Key';
+  document.getElementById('lmsGroup').style.display    = lms ? '' : 'none';
   if (lms) {
     document.getElementById('modelSelect').value = 'local-model';
     document.getElementById('customModelInput').style.display = 'none';
-  } else {
-    if (document.getElementById('modelSelect').value === 'local-model')
-      document.getElementById('modelSelect').value = 'qwen/qwen3-coder:free';
+  } else if (document.getElementById('modelSelect').value === 'local-model') {
+    document.getElementById('modelSelect').value = 'qwen/qwen3-coder:free';
+    document.getElementById('customModelInput').style.display = 'none';
   }
   checkApiKey();
-}
-
-function openLMSGuide() {
-  const o = document.getElementById('lmsGuideOverlay');
-  o.style.display = 'flex';
-}
-function closeLMSGuide() {
-  document.getElementById('lmsGuideOverlay').style.display = 'none';
 }
 
 // Show/hide custom model ID field when "Paste custom ID" selected
@@ -713,74 +664,70 @@ function checkApiKey() {
   const lms = document.getElementById('backendSelect').value === 'lmstudio';
   if (lms) {
     const url = document.getElementById('lmsUrlInput').value.trim();
-    st.textContent = url ? 'LMS: ' + url.replace('http://','') : 'No URL';
-    st.className = url ? 'ok' : '';
+    st.textContent = url ? 'URL set' : 'No URL'; st.className = url ? 'ok' : '';
   } else {
     const key = document.getElementById('apiKeyInput').value.trim();
     const mdl = getActiveModel();
     if (!key)  { st.textContent = 'No key'; st.className = ''; }
-    else if (!mdl || mdl === '__custom__') { st.textContent = 'No model ID'; st.className = 'error'; }
+    else if (!mdl) { st.textContent = 'No model ID'; st.className = 'error'; }
     else { st.textContent = 'Key set · ' + mdl.split('/').pop().substring(0,18); st.className = 'ok'; }
   }
 }
 
 async function testConnection() {
   const st = document.getElementById('apiStatus');
+  const key = document.getElementById('apiKeyInput').value.trim();
+  const model = getActiveModel();
   const backend = document.getElementById('backendSelect').value;
-  const lms = backend === 'lmstudio';
 
-  if (!lms) {
-    const key = document.getElementById('apiKeyInput').value.trim();
-    const model = getActiveModel();
-    if (!key)   { st.textContent = 'No API key'; st.className = 'error'; return; }
-    if (!model) { st.textContent = 'No model ID'; st.className = 'error'; return; }
+  if (backend !== 'lmstudio' && !key) {
+    st.textContent = 'No API key'; st.className = 'error'; return;
+  }
+  if (backend !== 'lmstudio' && !model) {
+    st.textContent = 'No model ID'; st.className = 'error'; return;
   }
 
   st.textContent = 'Testing…'; st.className = 'loading';
 
-  // For OpenRouter: first verify key via lightweight auth endpoint
-  if (!lms) {
+  // First: check key validity via the /auth/key endpoint (no model needed)
+  if (backend !== 'lmstudio') {
     try {
-      const key = document.getElementById('apiKeyInput').value.trim();
       const authResp = await fetch('https://openrouter.ai/api/v1/auth/key', {
         headers: { 'Authorization': 'Bearer ' + key }
       });
       if (!authResp.ok) {
         const e = await authResp.json().catch(() => ({}));
-        st.textContent = 'Key invalid (' + authResp.status + ')';
+        st.textContent = 'Key invalid: ' + (e.error?.message || authResp.status);
         st.className = 'error';
-        showDebug('AUTH FAILED', { status: authResp.status, body: e });
+        showDebug('AUTH CHECK FAILED', { status: authResp.status, body: e });
         return;
       }
       const authData = await authResp.json();
-      showDebug('AUTH OK', { label: authData.data?.label, limit: authData.data?.limit, usage: authData.data?.usage });
+      showDebug('AUTH CHECK OK', authData);
     } catch(e) {
-      st.textContent = 'CORS/network error';
+      st.textContent = 'Network error: ' + e.message.substring(0,40);
       st.className = 'error';
-      showDebug('NETWORK ERROR — likely file:// CORS block', {
-        message: e.message,
-        fix: 'Run: python3 -m http.server 8080  then open http://localhost:8080/SuspenseLens.html'
-      });
+      showDebug('NETWORK ERROR (possible CORS)', { message: e.message, hint: 'Try opening this file via a local web server instead of file://' });
       return;
     }
   }
 
-  // Test a minimal completion for both backends
+  // Second: test a minimal chat completion
   try {
-    const txt = await callLLM('Reply with exactly the word OK and nothing else.', 'You are a test assistant. Reply with only the word OK.', 5);
+    const txt = await callLLM('Reply with exactly the word: OK', 'You are a test assistant. Reply with only: OK', 8);
     if (txt && txt.trim().length > 0) {
-      st.textContent = '✓ Connected';
+      st.textContent = '✓ Connected · ' + model.split('/').pop().substring(0,20);
       st.className = 'ok';
-      showDebug('TEST OK', { response: txt.trim() });
+      showDebug('COMPLETION TEST OK', { response: txt });
     } else {
       st.textContent = 'Empty response';
       st.className = 'error';
-      showDebug('EMPTY RESPONSE', { raw: txt });
+      showDebug('COMPLETION TEST: empty response', {});
     }
   } catch(e) {
-    st.textContent = e.message.substring(0, 50);
+    st.textContent = 'Error: ' + e.message.substring(0,45);
     st.className = 'error';
-    showDebug('COMPLETION FAILED', { error: e.message });
+    showDebug('COMPLETION TEST FAILED', { error: e.message });
   }
 }
 

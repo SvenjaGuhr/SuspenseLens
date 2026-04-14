@@ -430,22 +430,20 @@
     </select>
 
     <label>Model</label>
-    <select id="modelSelect" style="max-width:190px;" onchange="onModelSelectChange()">
-      <option value="__custom__">✏ Paste custom ID below…</option>
-      <optgroup label="Qwen — confirmed free">
-        <option value="qwen/qwen3-coder:free">Qwen3 Coder 480B (free) ★</option>
-        <option value="qwen/qwen3-next-80b-a3b:free">Qwen3 Next 80B A3B (free)</option>
-        <option value="qwen/qwen3.6-plus:free">Qwen3.6 Plus (free)</option>
-        <option value="qwen/qwen3.6-plus-preview:free">Qwen3.6 Plus Preview (free)</option>
+    <select id="modelSelect" style="max-width:220px;">
+      <optgroup label="Qwen — free ★ recommended">
+        <option value="qwen/qwen3.6-plus:free">Qwen 3.6 Plus (free) ★</option>
+        <option value="qwen/qwen3.6-plus-preview:free">Qwen 3.6 Plus Preview (free)</option>
         <option value="qwen/qwen3-235b-a22b:free">Qwen3 235B-A22B (free)</option>
         <option value="qwen/qwen3-30b-a3b:free">Qwen3 30B-A3B (free)</option>
         <option value="qwen/qwen3-14b:free">Qwen3 14B (free)</option>
         <option value="qwen/qwen3-8b:free">Qwen3 8B (free)</option>
         <option value="qwen/qwen2.5-72b-instruct:free">Qwen 2.5 72B (free)</option>
+        <option value="qwen/qwen2.5-7b-instruct:free">Qwen 2.5 7B (free)</option>
       </optgroup>
       <optgroup label="Other free models">
-        <option value="openrouter/free">openrouter/free (auto-route)</option>
         <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B (free)</option>
+        <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 8B (free)</option>
         <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (free)</option>
         <option value="google/gemma-3-12b-it:free">Gemma 3 12B (free)</option>
         <option value="microsoft/phi-4-reasoning:free">Phi-4 Reasoning (free)</option>
@@ -454,11 +452,6 @@
         <option value="local-model">Auto-detect loaded model</option>
       </optgroup>
     </select>
-    <!-- Custom model ID — shown when "Paste custom ID" is selected, or always visible as helper -->
-    <input id="customModelInput" type="text" placeholder="e.g. qwen/qwen3-coder:free"
-      oninput="onCustomModelInput()"
-      style="width:190px;display:none;background:var(--surface2);border:1px solid var(--accent);border-radius:6px;padding:4px 8px;font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text);outline:none;"
-      title="Paste any model ID from openrouter.ai/models — click the copy icon next to the model name">
 
     <label id="apiKeyLabel">API Key</label>
     <input id="apiKeyInput" type="password" placeholder="sk-or-v1-…" oninput="checkApiKey()" style="width:210px;">
@@ -623,33 +616,10 @@ function onBackendChange() {
   document.getElementById('lmsUrlInput').style.display = lms ? '' : 'none';
   document.getElementById('apiKeyLabel').textContent   = lms ? 'Base URL' : 'API Key';
   document.getElementById('lmsGroup').style.display    = lms ? '' : 'none';
-  if (lms) {
-    document.getElementById('modelSelect').value = 'local-model';
-    document.getElementById('customModelInput').style.display = 'none';
-  } else if (document.getElementById('modelSelect').value === 'local-model') {
-    document.getElementById('modelSelect').value = 'qwen/qwen3-coder:free';
-    document.getElementById('customModelInput').style.display = 'none';
-  }
+  if (lms) document.getElementById('modelSelect').value = 'local-model';
+  else if (document.getElementById('modelSelect').value === 'local-model')
+    document.getElementById('modelSelect').value = 'qwen/qwen3.6-plus:free';
   checkApiKey();
-}
-
-// Show/hide custom model ID field when "Paste custom ID" selected
-function onModelSelectChange() {
-  const val = document.getElementById('modelSelect').value;
-  const ci  = document.getElementById('customModelInput');
-  if (val === '__custom__') { ci.style.display = ''; ci.focus(); }
-  else ci.style.display = 'none';
-}
-
-function onCustomModelInput() { checkApiKey(); }
-
-// Always use this to get the model ID — reads custom field if needed
-function getActiveModel() {
-  const sel = document.getElementById('modelSelect').value;
-  if (sel === '__custom__') {
-    return document.getElementById('customModelInput').value.trim();
-  }
-  return sel;
 }
 
 function checkApiKey() {
@@ -660,10 +630,8 @@ function checkApiKey() {
     st.textContent = url ? 'URL set' : 'No URL'; st.className = url ? 'ok' : '';
   } else {
     const key = document.getElementById('apiKeyInput').value.trim();
-    const mdl = getActiveModel();
-    if (!key)  { st.textContent = 'No key'; st.className = ''; }
-    else if (!mdl) { st.textContent = 'No model ID'; st.className = 'error'; }
-    else { st.textContent = 'Key set · ' + mdl.split('/').pop().substring(0,18); st.className = 'ok'; }
+    if (!key) { st.textContent = 'Not set'; st.className = ''; }
+    else { st.textContent = 'Key set'; st.className = 'ok'; }
   }
 }
 
@@ -687,7 +655,7 @@ async function testConnection() {
 async function callLLM(userMsg, systemMsg, maxTokens) {
   maxTokens = maxTokens || 1600;
   const backend = document.getElementById('backendSelect').value;
-  const model   = getActiveModel();
+  const model   = document.getElementById('modelSelect').value;
   let url, headers, bodyObj;
 
   if (backend === 'lmstudio') {
@@ -698,11 +666,10 @@ async function callLLM(userMsg, systemMsg, maxTokens) {
       max_tokens: maxTokens, temperature: 0.1,
       messages: [{ role: 'system', content: systemMsg }, { role: 'user', content: userMsg }]
     };
-    if (model && model !== 'local-model') bodyObj.model = model;
+    if (model !== 'local-model') bodyObj.model = model;
   } else {
     const key = document.getElementById('apiKeyInput').value.trim();
-    if (!key)   throw new Error('No API key set');
-    if (!model) throw new Error('No model ID — select a model or paste a custom ID');
+    if (!key) throw new Error('No API key set');
     url = 'https://openrouter.ai/api/v1/chat/completions';
     headers = {
       'Content-Type': 'application/json',

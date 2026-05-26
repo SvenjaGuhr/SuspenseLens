@@ -9,11 +9,10 @@ SuspenseLens lets you load any short story, run it through a local AI model, and
 
 - Annotates every sentence of a text for **reader suspense** and **character anxiety** on a 0–5 Likert scale
 - Applies four suspense theories in parallel:
-  - **T1** Uncertainty-based suspense (Carroll / Smuts)
-  - **T2** Desire-Frustration suspense (Smuts)
-  - **T3** Suspense in the Absence of Uncertainty / Mental Space Theory (Fauconnier)
+  - **T1** Uncertainty-based suspense (Carroll 1997 / Iwata 2009)
+  - **T2** Desire-Frustration suspense (Smuts 2008)
+  - **T3** Suspense in the Absence of Uncertainty (Gerring 1996)
   - **T4** Casual reader — no theory knowledge
-  - **T5** Constitutional / general annotation
 - Displays results as a **blue heatmap** overlay with **colour-coded underlines per theory** (comparable to CATMA annotation)
 - Filter by theory, suspense level, character, or suspense element
 - Export annotations as **JSON, CSV, or TSV** for further analysis
@@ -33,7 +32,7 @@ SuspenseLens lets you load any short story, run it through a local AI model, and
 
 ### Step 1 — Download SuspenseLens
 
-Download `SuspenseLens.html` from this repository (click the file → **Download raw file**) and save it somewhere easy to find, for example your Desktop or a project folder.
+Download `SuspenseLens_V.n.html` from this repository (click the file → **Download raw file**) and save it somewhere easy to find, for example your Desktop or a project folder.
 
 ---
 
@@ -155,7 +154,6 @@ Each sentence receives the following fields per theory:
 | `character_anxiety_level` | 0–5 Likert scale — suspense/anxiety of the focal character |
 | `character` | Name of the character experiencing suspense |
 | `suspense_element` | Literary element or mechanism causing suspense |
-| `arising_question` | The question the suspense raises for the reader |
 
 ---
 
@@ -163,9 +161,9 @@ Each sentence receives the following fields per theory:
 
 The annotation prompts are grounded in the following theories:
 
-- **Uncertainty-based suspense** — suspense as forward-looking uncertainty about an unknown outcome (Carroll 1996; Smuts 2008)
-- **Desire-Frustration suspense** — suspense without uncertainty; the reader possesses information the character lacks and cannot communicate (Smuts 2008)
-- **Suspense in the Absence of Uncertainty** — using Fauconnier's Mental Space Theory (1994) to explain how suspense persists even when the reader knows the outcome
+- **Uncertainty-based suspense** — suspense as forward-looking uncertainty about an unknown outcome (Carroll 1997 / Iwata 2009)
+- **Desire-Frustration suspense** — suspense without uncertainty; the reader possesses information the character lacks but cannot change the outcome (Smuts 2008)
+- **Suspense in the Absence of Uncertainty** — using Gerring's theory (1996) to explain how suspense persists even when the reader knows the outcome (last 10% of the text) 
 - **Casual reader** — surface-level, intuitive annotation without theoretical framing
 
 ---
@@ -184,16 +182,25 @@ The annotation prompts are grounded in the following theories:
 
 ## Importing existing annotations
 
-If you have a CSV annotation file in the project scheme format (columns: `Sentence_ID`, `Sentence`, `reader_suspense_level`, `character_anxiety_level`, `character`, `suspense_element`), click **⬆ CSV** in the toolbar to import it as a baseline. The tool will display the human annotations and you can run AI annotations on top for comparison.
+If you have a CSV or EXCEL annotation file in the project scheme format (columns: `Sentence_ID`, `Sentence`, `reader_suspense_level`, `character_anxiety_level`, `character`, `suspense_element`), click **⬆ CSV** in the toolbar to import a `gold annotation` as a baseline. The tool will display the human annotations and you can run AI annotations on top for comparison.
 
 ---
+
+## References
+
+Carroll, Noël. 1997. “The Paradox of Suspense.” In Suspense: Conceptualizations, Theoretical Analyses, and Empirical Explorations. <br>
+De Ford, Miriam Allen. 1961. “Oh Rats!” Science fiction novella. Galaxy Magazine December 1961. https://www.gutenberg.org/ebooks/51751. <br>
+Gerrig, Richard. 1996. “Suspense in the Absence of Uncertainty.” Journal of Memory and Language 28 (6): 633–48. 10.1016/0749-596X(89)90001-6. <br>
+Guhr, Svenja. 2026. Suspense in Shorts. GitHub Repository. https://github.com/SvenjaGuhr/Suspense_in_Shorts. <br>
+Iwata, Yumiko. 2009. “Creating Suspense and Surprise in Short Literary Fiction: A Stylistic and Narratological Approach.” Doctoral Thesis, University of Birmingham. <br>
+Smuts, Aaron. 2008. “The Desire-Frustration Theory of Suspense.” Journal of Aesthetics and Art Criticism 66 (3): 281–90. 10.1111/j.1540-6245.2008.00309.x. <br>
 
 ## Citing this tool
 
 If you use SuspenseLens in your research, please cite:
 
 ```
-Guhr, Svenja. 2026. SuspenseLens. GitHub Repository. https://github.com/SvenjaGuhr/SuspenseLens.
+Guhr, Svenja. 2026. SuspenseLens. V.1.0 GitHub Repository. https://github.com/SvenjaGuhr/SuspenseLens.
 ```
 
 ---
@@ -202,4 +209,4 @@ Guhr, Svenja. 2026. SuspenseLens. GitHub Repository. https://github.com/SvenjaGu
 
 The code has been developed supported by Anthropic's Sonnet 4.6 model in the Claude.ai user interface.
 
-Last update: 2026-04-13, 08:50 PM
+Last update: 2026-05-26, 06:00 PM

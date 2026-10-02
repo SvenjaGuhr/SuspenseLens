@@ -3,7 +3,7 @@
 
 SuspenseLens lets you load a short story, annotate it sentence by sentence with a local large language model system, and compare the results with human gold annotations. Annotations follow four theoretical perspectives on suspense and appear as a color-coded heatmap with colored underlines per theory, directly in your browser. No server, no subscription, and no text leaves your computer.
 
-Current version: **3.8** (`SuspenseLens_V3_8.html`)
+Current version: **4.0** (`SuspenseLens_V4_0.html`)
 
 ---
 
@@ -23,7 +23,7 @@ Current version: **3.8** (`SuspenseLens_V3_8.html`)
 
 ---
 
-## What's new in version 3.8
+## What's new in version 4.0
 
 - **Prompts identical to the paper.** The constitutional prompt and the four theory prompts (T1–T4) use the exact wording of the appendix of Guhr, Bamman et al. (in preparation). Theory names and citations in the interface match the paper.
 - **Model menu shows your downloaded models.** SuspenseLens asks LM Studio for all downloaded language models (embedding models excluded) and lists only these. The currently loaded model is marked with ●. The list refreshes on page load, when you switch to LM Studio, when you change the server URL, and with **↻ Refresh models**.
@@ -57,7 +57,7 @@ Current version: **3.8** (`SuspenseLens_V3_8.html`)
 
 ### Step 1: Download SuspenseLens
 
-Download `SuspenseLens_V3_8.html` from this repository (click the file → **Download raw file**) and save it in an easy-to-find folder, for example your Desktop or a project folder.
+Download `SuspenseLens_V4_0.html` from this repository (click the file → **Download raw file**) and save it in an easy-to-find folder, for example your Desktop or a project folder.
 
 ### Step 2: Install LM Studio
 
@@ -92,7 +92,7 @@ When you load a model in LM Studio, check two settings:
 Browsers block network requests from HTML files opened directly from disk, so SuspenseLens needs a small local web server. Open a Terminal (Mac: `Cmd + Space` → type Terminal → Enter) and run:
 
 ```bash
-cd ~/Desktop          # or the folder where you saved SuspenseLens_V3_8.html
+cd ~/Desktop          # or the folder where you saved SuspenseLens_V4_0.html
 python3 -m http.server 8080
 ```
 
@@ -105,7 +105,7 @@ You should see `Serving HTTP on :: port 8080 ...`. **Keep this window open** whi
 Open Chrome, Firefox, or Safari and go to:
 
 ```
-http://localhost:8080/SuspenseLens_V3_8.html
+http://localhost:8080/SuspenseLens_V4_0.html
 ```
 
 The tool opens with Oscar Wilde's *The Model Millionaire* as a demo text with human baseline annotations.
@@ -257,7 +257,7 @@ To display human annotations, click **⬆ CSV** and select a CSV file in the pro
 
 ## References
 
-De Ford, Miriam Allen. 1961. "Oh, Rats!" *Galaxy Magazine*, December 1961. https://www.gutenberg.org/ebooks/51751. <br>
+Doyle, Arthur Conan. 1913. "How It Happened." _The Strand Magazine_.
 Gerrig, Richard J. 1989. "Suspense in the Absence of Uncertainty." *Journal of Memory and Language* 28 (6): 633–48. https://doi.org/10.1016/0749-596X(89)90001-6. <br>
 Guhr, Svenja. 2026. *Suspense in Shorts*. GitHub repository. https://github.com/SvenjaGuhr/Suspense_in_Shorts. <br>
 Guhr, Svenja, David Bamman, et al. In preparation. "Keeping Us in Suspense: Testing Theory Pluralism Against LLMs' Intrinsic Concepts." <br>
@@ -272,13 +272,13 @@ Smuts, Aaron. 2008. "The Desire-Frustration Theory of Suspense." *Journal of Aes
 If you use SuspenseLens in your research, please cite:
 
 ```
-Guhr, Svenja. 2026. SuspenseLens. Version 3.8. GitHub repository. https://github.com/SvenjaGuhr/SuspenseLens.
+Guhr, Svenja. 2026. SuspenseLens. Version 4.0. GitHub repository. https://github.com/SvenjaGuhr/SuspenseLens.
 ```
 
 ---
 
 ## AI-use declaration
 
-The code was developed with the support of Anthropic's Claude models (Sonnet 4.6 and Opus 5.5) in the Claude app.
+The code was developed with the support of Anthropic's Claude models (Sonnet 4.6 and Opus 5.5).
 
 Last update: 2026-10-01

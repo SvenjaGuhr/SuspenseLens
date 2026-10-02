@@ -3,7 +3,7 @@
 
 SuspenseLens lets you load a short story, annotate it sentence by sentence with a local large language model system, and compare the results with human gold annotations. Annotations follow four theoretical perspectives on suspense and appear as a color-coded heatmap with colored underlines per theory, directly in your browser. No server, no subscription, and no text leaves your computer.
 
-Current version: **4.0** (`SuspenseLens_V4_0.html`)
+Current version: **3.8** (`SuspenseLens_V3_8.html`)
 
 ---
 
@@ -23,7 +23,7 @@ Current version: **4.0** (`SuspenseLens_V4_0.html`)
 
 ---
 
-## What's new in version 4.0
+## What's new in version 3.8
 
 - **Prompts identical to the paper.** The constitutional prompt and the four theory prompts (T1–T4) use the exact wording of the appendix of Guhr, Bamman et al. (in preparation). Theory names and citations in the interface match the paper.
 - **Model menu shows your downloaded models.** SuspenseLens asks LM Studio for all downloaded language models (embedding models excluded) and lists only these. The currently loaded model is marked with ●. The list refreshes on page load, when you switch to LM Studio, when you change the server URL, and with **↻ Refresh models**.
@@ -32,6 +32,7 @@ Current version: **4.0** (`SuspenseLens_V4_0.html`)
 - **Missing answers stay missing.** If a model returns no usable levels for a sentence, SuspenseLens retries up to three times. Sentences that still receive no answer stay unannotated, are listed at the end of the run, and are left out of the evaluation. Earlier versions stored them as 0.
 - **Support for reasoning models.** SuspenseLens asks models to skip their reasoning phase, retries once with a larger output budget if reasoning used up the budget, and recovers answers that a model writes into its reasoning output.
 - **Shorter output and timing readout.** The model is asked for minimal answers (suspense element of at most six words). The progress bar shows seconds per request, output tokens, and an estimate of the remaining time.
+- **Light and dark mode.** The **☀ Light / ☾ Dark** button in the toolbar switches to a white background. The choice is remembered in your browser, and chart exports (PNG, HTML) use the current theme.
 - **Evaluation fixes.** The evaluation CSV export now escapes quotation marks correctly and includes a `Gold_Sentence_ID` column. The **⚡ Run Evaluation** button becomes available after every finished or cancelled run.
 
 ---
@@ -57,7 +58,7 @@ Current version: **4.0** (`SuspenseLens_V4_0.html`)
 
 ### Step 1: Download SuspenseLens
 
-Download `SuspenseLens_V4_0.html` from this repository (click the file → **Download raw file**) and save it in an easy-to-find folder, for example your Desktop or a project folder.
+Download `SuspenseLens_V3_8.html` from this repository (click the file → **Download raw file**) and save it in an easy-to-find folder, for example your Desktop or a project folder.
 
 ### Step 2: Install LM Studio
 
@@ -92,7 +93,7 @@ When you load a model in LM Studio, check two settings:
 Browsers block network requests from HTML files opened directly from disk, so SuspenseLens needs a small local web server. Open a Terminal (Mac: `Cmd + Space` → type Terminal → Enter) and run:
 
 ```bash
-cd ~/Desktop          # or the folder where you saved SuspenseLens_V4_0.html
+cd ~/Desktop          # or the folder where you saved SuspenseLens_V3_8.html
 python3 -m http.server 8080
 ```
 
@@ -105,7 +106,7 @@ You should see `Serving HTTP on :: port 8080 ...`. **Keep this window open** whi
 Open Chrome, Firefox, or Safari and go to:
 
 ```
-http://localhost:8080/SuspenseLens_V4_0.html
+http://localhost:8080/SuspenseLens_V3_8.html
 ```
 
 The tool opens with Oscar Wilde's *The Model Millionaire* as a demo text with human baseline annotations.
@@ -142,6 +143,8 @@ Click **⬇ Export ▾** and choose:
 
 > Annotations are kept only while the page is open. **Export the session JSON after every run.**
 
+**Run information in every export.** The first line of every export records how the annotations were produced: SuspenseLens version, text, export time, and for each theory the model, backend, context setting, batch size, temperature, status (completed or cancelled), end time, number of annotated sentences, and sentences without an answer. In CSV, TSV, and evaluation CSV files, this line starts with `#` (read them with `pandas.read_csv(path, comment='#')` in Python or `read.csv(path, comment.char = '#')` in R). In JSON files, it is the first field, `suspenselens_run`, and the full settings follow under `runs`. Chart HTML files begin with it as an HTML comment, and PNG charts show it above the chart. Sentences without an annotation for a theory are left empty in CSV and TSV exports.
+
 ---
 
 ## Annotation settings
@@ -170,12 +173,14 @@ The progress bar shows seconds per request, average output tokens, reasoning tok
 
 ---
 
-## Running several theories and cancelling runs
+## Running several theories, resuming, and merging sessions
 
 - **Annotations are stored per theory.** A T3 run after a T2 run adds T3 annotations and leaves the T2 annotations unchanged. Both are available for the evaluation.
 - **Cancelling keeps everything annotated so far.** The request in progress finishes and is saved, then the run stops. The partial annotations can be exported and evaluated; the evaluation then covers only the annotated sentences.
-- **Rerunning a theory overwrites it sentence by sentence.** If you cancel a rerun halfway, the result mixes the new and the old run. Export the old run first and reload the text before starting again.
-- **Loading a text or importing a CSV clears all annotations** for all theories.
+- **Resuming a run.** Choose **Only missing (resume)** next to the batch size and click **⚡ Annotate**. SuspenseLens annotates only the sentences that have no annotation yet for the selected theory, so a cancelled run continues where it stopped and sentences without an answer are filled in. The reading context is rebuilt from the text, so a resumed sentence receives the same context as in an uninterrupted run. If the earlier part was annotated with another model, SuspenseLens asks before mixing models, and the run information records the resumption.
+- **Rerunning a theory.** With **All sentences**, SuspenseLens asks before replacing existing annotations of that theory.
+- **Merging sessions.** To combine theories annotated in separate sessions (for example T2 on one day and T3 on another), load one session, click **⬆ Session JSON**, tick **Merge into the current session**, and load the other. Annotations the open session lacks are added sentence by sentence; existing annotations are kept. Both sessions must contain the same text with the same sentence split. The run information of both sessions is kept per theory.
+- **Loading a text or importing a CSV clears all annotations** for all theories. Export the session JSON first.
 
 ---
 
@@ -195,14 +200,31 @@ Open **📊 Evaluation**, upload a gold file, choose a theory under **Compare go
 
 ```bash
 pip install pandas openpyxl
-python build_gold_standard.py --input-dir <folder> --output <name>_gold.xlsx
+python build_gold_standard.py --input-dir <folder> --output <name>_gold.xlsx                       # mean (default)
+python build_gold_standard.py --input-dir <folder> --output <name>_gold_median.xlsx --aggregate median
 ```
 
-The script (1) takes the level chosen by most annotators, breaking ties toward the median and then toward the lower level, (2) treats empty cells as missing ratings, (3) excludes annotators who left character anxiety at 0 throughout a text from that scale's vote, (4) removes lines without text (such as section breaks), and (5) warns when two annotator sheets are nearly identical. Each theory sheet also lists every annotator's vote and the share of annotators agreeing with the result; an `agreement` sheet reports per-annotator agreement with the vote.
+For every sentence and both scales, the script computes three aggregates of the annotators' ratings and writes all of them to each theory sheet: (1) the **mean** (`R_mean`, `C_mean`, two decimals), (2) the **median** (`R_median`, `C_median`; with an even number of annotators a half value is rounded down), and (3) the **majority vote** (`R_majority`, `C_majority`; ties go to the value closest to the median, then to the lower value). `--aggregate` chooses which of them fills `reader_suspense_level` and `character_anxiety_level`, the columns SuspenseLens evaluates against; the default is the mean. In addition, the script (4) treats empty cells as missing ratings, (5) counts every annotator, including those who rated a scale 0 throughout a text, since 0 is a valid rating (`--exclude-all-zero` leaves them out), (6) removes lines without text (such as section breaks), and (7) warns when two annotator sheets are nearly identical. Each theory sheet also lists every annotator's ratings; an `agreement` sheet reports each annotator's exact agreement with the majority vote and mean distance to the mean.
+
+**Which aggregate?** The mean uses every rating and keeps the distances on the scale, which suits correlation measures such as Spearman's ρ. The median suits metrics that need whole levels (exact agreement, κ). The majority vote is kept for comparison; on a 0–5 scale with many default zeros, it often falls to 0 although several annotators rated a sentence clearly above 0.
 
 ### Matching and metrics
 
 Gold and model sentences are aligned by text similarity (Jaccard similarity and longest common subsequence, threshold 0.35), so a gold file also works when SuspenseLens has split the text slightly differently. For each theory and scale, SuspenseLens reports exact agreement, agreement within one level, mean absolute error, root mean squared error, Pearson and Spearman correlation, Cohen's κ, linearly weighted κ, and per-level precision, recall, and F1. **⬇ Export CSV** saves the sentence-level comparison.
+
+Gold values may be decimals (for example a mean of 2.67). Correlations, mean absolute error, and root mean squared error use the exact value; exact agreement, agreement within one level, κ, and per-level scores use the value rounded to the nearest level. Spearman's ρ is computed as the correlation of average ranks, which is exact with tied ratings.
+
+### Human–model agreement heat maps
+
+`iaa_heatmap.py` draws one heat map per scale, with every annotator and the mean, median, and majority vote per theory as rows and one model per column:
+
+```bash
+pip install pandas numpy matplotlib scipy openpyxl
+python iaa_heatmap.py --gold <name>_gold.xlsx --metric spearman \
+  --model "Qwen3-4B=eval_qwen4b.csv" --model "Qwen3.8-27B=eval_qwen27b.csv" --out <name>_spearman
+```
+
+Each `--model` is a SuspenseLens evaluation CSV (version 3.8 or later). `--metric` is `spearman`, `alpha` (Krippendorff's α, ordinal; the default), or `qwk` (quadratic weighted κ). Spearman uses decimal gold values as they are; α and κ round them to the nearest level. The script writes PNG and PDF figures and a CSV with every value and the number of sentences it is based on.
 
 ---
 
@@ -221,7 +243,7 @@ Each sentence receives the following fields per theory:
 
 ## Prompts
 
-The prompts are documented in the appendix of the accompanying paper; SuspenseLens uses them verbatim. Each request also contains (1) four few-shot annotations per theory from Wilde's *The Model Millionaire*, (2) the reading context described above, (3) the instruction to read the input sentences in order and keep the answer minimal, and (4) for LM Studio, a request to skip the reasoning phase (`/no_think`, `enable_thinking: false`, `reasoning_effort: low`). Models that do not support these settings ignore them.
+The prompts are documented in the appendix of the accompanying paper; SuspenseLens uses them verbatim. Each request also contains (1) four few-shot annotations per theory from Wilde's *The Model Millionaire*, (2) the reading context described above, (3) the instruction to read the input sentences in order and keep the answer minimal, and (4) for LM Studio, a request to skip the reasoning phase (`/no_think`, `enable_thinking: false`). Models that do not support these settings ignore them.
 
 ---
 
@@ -257,7 +279,7 @@ To display human annotations, click **⬆ CSV** and select a CSV file in the pro
 
 ## References
 
-Doyle, Arthur Conan. 1913. "How It Happened." _The Strand Magazine_.
+De Ford, Miriam Allen. 1961. "Oh, Rats!" *Galaxy Magazine*, December 1961. https://www.gutenberg.org/ebooks/51751. <br>
 Gerrig, Richard J. 1989. "Suspense in the Absence of Uncertainty." *Journal of Memory and Language* 28 (6): 633–48. https://doi.org/10.1016/0749-596X(89)90001-6. <br>
 Guhr, Svenja. 2026. *Suspense in Shorts*. GitHub repository. https://github.com/SvenjaGuhr/Suspense_in_Shorts. <br>
 Guhr, Svenja, David Bamman, et al. In preparation. "Keeping Us in Suspense: Testing Theory Pluralism Against LLMs' Intrinsic Concepts." <br>
@@ -272,13 +294,13 @@ Smuts, Aaron. 2008. "The Desire-Frustration Theory of Suspense." *Journal of Aes
 If you use SuspenseLens in your research, please cite:
 
 ```
-Guhr, Svenja. 2026. SuspenseLens. Version 4.0. GitHub repository. https://github.com/SvenjaGuhr/SuspenseLens.
+Guhr, Svenja. 2026. SuspenseLens. Version 3.8. GitHub repository. https://github.com/SvenjaGuhr/SuspenseLens.
 ```
 
 ---
 
 ## AI-use declaration
 
-The code was developed with the support of Anthropic's Claude models (Sonnet 4.6 and Opus 5.5).
+The code was developed with the support of Anthropic's Claude models (Sonnet 4.6 and Opus 5.5) in the Claude app.
 
 Last update: 2026-10-01

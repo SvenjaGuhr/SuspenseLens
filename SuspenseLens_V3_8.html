@@ -327,7 +327,7 @@
 <aside id="sidebar">
   <div class="sidebar-logo">
     <h1>SuspenseLens</h1>
-    <div class="subtitle" title="SuspenseLens v3.8 · build 2026-10-02d">Literary Annotation Tool</div>
+    <div class="subtitle" title="SuspenseLens v3.8 · build 2026-10-04c">Literary Annotation Tool</div>
   </div>
   <div class="sidebar-scroll">
 
@@ -544,7 +544,7 @@
       <div style="width:1px;height:14px;background:var(--border)"></div>
       <label style="display:flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:.66rem;cursor:pointer;"><input type="checkbox" id="chkSmooth" onchange="renderChart()"> Smooth</label>
       <label style="display:flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:.66rem;cursor:pointer;"><input type="checkbox" id="chkCharDots" checked onchange="renderChart()"> Character dots</label>
-      <label style="display:flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:.66rem;cursor:pointer;"><input type="checkbox" id="chkBaseline" checked onchange="renderChart()"> Human baseline</label>
+      <label style="display:flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:.66rem;cursor:pointer;"><input type="checkbox" id="chkBaseline" checked onchange="renderChart()"> <span id="baselineLabel" title="With a gold file loaded in the Evaluation tab: the human gold per theory as dashed lines in the theory colors">Human baseline</span></label>
       <div style="flex:1"></div>
       <span style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text-dim)">Click any point to navigate</span>
       <div style="width:1px;height:14px;background:var(--border)"></div>
@@ -627,6 +627,14 @@
   </div>
 </div>
 
+<!-- Choice dialog (several buttons) -->
+<div id="choiceOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:450;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px 26px;width:520px;max-width:94vw;">
+    <div id="choiceText" style="font-size:.86rem;line-height:1.6;margin-bottom:18px;white-space:pre-line;"></div>
+    <div id="choiceButtons" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;"></div>
+  </div>
+</div>
+
 <!-- ══════════ LM STUDIO SETUP GUIDE MODAL ══════════ -->
 <div id="lmsGuideOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:400;align-items:center;justify-content:center;backdrop-filter:blur(3px);">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:32px;width:620px;max-width:96vw;max-height:88vh;overflow-y:auto;" onclick="event.stopPropagation()">
@@ -704,8 +712,25 @@ let currentView      = 'read';
 let modalMode        = 'load';
 let exportMenuOpen   = false;
 let annotCancelled   = false;
+let activeRequestCtrl = null;   // lets Cancel abort the request that is running
 let failedSentences  = {};
-const SUSPENSELENS_VERSION = '3.8 (build 2026-10-02d)';
+const SUSPENSELENS_VERSION = '3.8 (build 2026-10-04c)';
+
+// ── CHOICE DIALOG: resolves with the key of the clicked button ──────────
+function askChoice(text, buttons) {
+  return new Promise(resolve => {
+    const ov = document.getElementById('choiceOverlay');
+    document.getElementById('choiceText').textContent = text;
+    const box = document.getElementById('choiceButtons'); box.innerHTML = '';
+    buttons.forEach(b => {
+      const el = document.createElement('button');
+      el.className = 'btn' + (b.primary ? ' primary' : ''); el.textContent = b.label; el.style.fontSize = '.72rem';
+      el.onclick = () => { ov.style.display = 'none'; resolve(b.key); };
+      box.appendChild(el);
+    });
+    ov.style.display = 'flex';
+  });
+}
 
 // ── THEME (dark / light) ───────────────────────────────────────────────
 function applyTheme(theme) {
@@ -730,6 +755,7 @@ function chartFg(alpha) { return 'rgba(' + cssVar('--chart-fg') + ',' + alpha + 
 const LLM_TEMPERATURE = 0.1;
 let runInfo = {};          // { theory: settings and outcome of the run that produced its annotations }
 let goldFileName = '';
+let lmsModelInfo = {};     // id -> {loaded, ctx (loaded context length in tokens), maxCtx}
 
 // Settings of the run that is about to start, for one theory
 function currentRunSettings(theory) {
@@ -742,6 +768,7 @@ function currentRunSettings(theory) {
     context: document.getElementById('contextModeSelect')?.value || 'theory',
     batch_size: parseInt(document.getElementById('batchSizeSelect')?.value) || 3,
     temperature: LLM_TEMPERATURE,
+    context_length: lms ? (lmsModelInfo[getActiveModel()]?.ctx ?? null) : null,
     reasoning: lms ? 'requested off (/no_think, enable_thinking=false)' : 'model default',
     suspenselens: SUSPENSELENS_VERSION,
     started: new Date().toISOString()
@@ -755,7 +782,7 @@ function runInfoLine(theories) {
   const parts = ts.map(t => {
     const r = runInfo[t];
     return t.toUpperCase() + ': ' + r.model + ' (' + r.backend + '), context ' + (ctxName[r.context] || r.context) +
-      ', batch ' + r.batch_size + ', temperature ' + r.temperature + ', ' + (r.status || 'running') + (r.resumed ? ' (resumed' + (r.previous && r.previous.model !== r.model ? ', earlier part with ' + r.previous.model : '') + ')' : '') +
+      ', batch ' + r.batch_size + ', temperature ' + r.temperature + (r.context_length ? ', context window ' + r.context_length + ' tokens' : '') + ', ' + (r.status || 'running') + (r.resumed ? ' (resumed' + (r.previous && r.previous.model !== r.model ? ', earlier part with ' + r.previous.model : '') + ')' : '') +
       (r.finished ? ' ' + r.finished : '') + (r.merged_with ? ', merged with a run of ' + r.merged_with.model : '') +
       (r.sentences_annotated != null ? ', ' + r.sentences_annotated + '/' + r.sentences_total + ' sentences' : '') +
       (r.sentences_without_answer?.length ? ', no answer: ' + r.sentences_without_answer.join(' ') : '');
@@ -1016,7 +1043,9 @@ async function lmsListModels(base) {
         name:   m.display_name || m.key || m.id,
         type:   m.type || 'llm',
         params: m.params_string || '',
-        loaded: Array.isArray(m.loaded_instances) ? m.loaded_instances.length > 0 : m.state === 'loaded'
+        loaded: Array.isArray(m.loaded_instances) ? m.loaded_instances.length > 0 : m.state === 'loaded',
+        ctx:    m.loaded_instances?.[0]?.config?.context_length ?? m.loaded_context_length ?? null,
+        maxCtx: m.max_context_length ?? null
       }));
     },
     // LM Studio 0.3.x native API
@@ -1025,7 +1054,8 @@ async function lmsListModels(base) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       if (!Array.isArray(d.data)) throw new Error('unexpected format');
-      return d.data.map(m => ({ id: m.id, name: m.id, type: m.type || 'llm', params: '', loaded: m.state === 'loaded' }));
+      return d.data.map(m => ({ id: m.id, name: m.id, type: m.type || 'llm', params: '', loaded: m.state === 'loaded',
+        ctx: m.loaded_context_length ?? null, maxCtx: m.max_context_length ?? null }));
     },
     // OpenAI-compatible fallback (no type info: filter embeddings by name)
     async () => {
@@ -1069,6 +1099,8 @@ async function fetchLMSModels(silent) {
       opt.title = m.id + (m.loaded ? ' (loaded)' : ' (loads on first request)');
       grp.appendChild(opt);
     }
+    lmsModelInfo = {};
+    models.forEach(m => { lmsModelInfo[m.id] = m; });
     const loaded = models.find(m => m.loaded);
     detectedLMSModel = loaded ? loaded.id : '';
     // Keep the user's choice if it still exists, else prefer the loaded model
@@ -1146,6 +1178,7 @@ async function callLLM(userMsg, systemMsg, maxTokens, _retry) {
 
   // AbortController: cancel request after 120 s to avoid indefinite hangs
   const ctrl    = new AbortController();
+  activeRequestCtrl = ctrl;
   const timeout = setTimeout(() => ctrl.abort(), 120000);
 
   let resp;
@@ -1155,6 +1188,7 @@ async function callLLM(userMsg, systemMsg, maxTokens, _retry) {
     resp = await fetch(url, { method:'POST', headers, body:JSON.stringify(bodyObj), signal: ctrl.signal });
   } catch(e) {
     clearTimeout(timeout);
+    if (e.name === 'AbortError' && annotCancelled) throw new Error('Cancelled');
     if (e.name === 'AbortError') throw new Error('Request timed out after 120 s — LM Studio may be overloaded or the model is too large for this batch');
     throw new Error('Network error: ' + e.message);
   }
@@ -1167,7 +1201,9 @@ async function callLLM(userMsg, systemMsg, maxTokens, _retry) {
     throw new Error('HTTP ' + resp.status + ': ' + msg.substring(0, 100));
   }
 
-  const data = await resp.json();
+  let data;
+  try { data = await resp.json(); }
+  catch(e) { if (annotCancelled) throw new Error('Cancelled'); throw e; }
   lastUsage = { ms: performance.now() - _t0, out: data.usage?.completion_tokens ?? null,
     reasoning: data.usage?.completion_tokens_details?.reasoning_tokens ?? null,
     ttft: data.stats?.time_to_first_token ?? null, tps: data.stats?.tokens_per_second ?? null };
@@ -1178,7 +1214,7 @@ async function callLLM(userMsg, systemMsg, maxTokens, _retry) {
   const reasoningText = msg0.reasoning_content || msg0.reasoning || '';
   // Any answer cut off at the token limit (reasoning in its own channel, thinking inside the
   // answer, or a long answer) is retried once with a larger budget
-  if (data.choices?.[0]?.finish_reason === 'length' && !_retry) {
+  if (data.choices?.[0]?.finish_reason === 'length' && !_retry && !annotCancelled) {
     const bigger = Math.min(Math.max(maxTokens * 4, 4096), 16384);
     console.warn('Answer cut off at ' + maxTokens + ' tokens; retrying with ' + bigger);
     return callLLM(userMsg, systemMsg, bigger, true);
@@ -1242,19 +1278,62 @@ async function runAnnotation() {
   // Which sentences each theory annotates in this run
   const scope = document.getElementById('scopeSelect')?.value || 'all';
   const hasAnn = (t, sid) => !!annotations[sid]?.theories?.[t];
-  const targets = {};
+  const targets = {}, scopeOf = {};
   for (const t of theoriesToRun) {
     const done = sentences.filter(x => hasAnn(t, x.id)).length;
-    targets[t] = sentences.map((x, i) => i).filter(i => scope === 'all' || !hasAnn(t, sentences[i].id));
-    if (scope === 'all' && done > 0 &&
-        !confirm(t.toUpperCase() + ' already has ' + done + ' annotated sentences. Annotate all sentences again and replace them?\n\n' +
-                 '(To continue a cancelled run instead, choose "Only missing (resume)".)')) return;
-    if (scope === 'missing' && runInfo[t] && runInfo[t].model !== currentRunSettings(t).model &&
-        !confirm('The existing ' + t.toUpperCase() + ' annotations were made with ' + runInfo[t].model +
-                 '. You selected ' + currentRunSettings(t).model + '. Continue with mixed models?')) return;
+    let mode = scope;
+    if (scope === 'all' && done > 0) {
+      const missing = sentences.length - done;
+      mode = await askChoice(
+        t.toUpperCase() + ' already has ' + done + ' of ' + sentences.length + ' sentences annotated' +
+        (runInfo[t]?.model ? ' (' + runInfo[t].model + ')' : '') + '.\n\nWhat should this run do for ' + t.toUpperCase() + '?',
+        [{ key: 'skip', label: 'Skip ' + t.toUpperCase(), primary: missing === 0 },
+         { key: 'missing', label: 'Only missing (' + missing + ')', primary: missing > 0 },
+         { key: 'all', label: 'Replace all' },
+         { key: 'cancel', label: 'Cancel run' }].filter(b => b.key !== 'missing' || missing > 0));
+      if (mode === 'cancel') return;
+    }
+    if (mode === 'missing' && runInfo[t] && runInfo[t].model !== currentRunSettings(t).model) {
+      const ok = await askChoice('The existing ' + t.toUpperCase() + ' annotations were made with ' + runInfo[t].model +
+        '. You selected ' + currentRunSettings(t).model + '.\n\nContinue with mixed models for ' + t.toUpperCase() + '?',
+        [{ key: 'skip', label: 'Skip ' + t.toUpperCase() }, { key: 'go', label: 'Continue', primary: true }, { key: 'cancel', label: 'Cancel run' }]);
+      if (ok === 'cancel') return;
+      if (ok === 'skip') mode = 'skip';
+    }
+    targets[t] = mode === 'skip' ? [] : sentences.map((x, i) => i).filter(i => mode === 'all' || !hasAnn(t, sentences[i].id));
+    scopeOf[t] = mode;
   }
-  if (scope === 'missing' && theoriesToRun.every(t => !targets[t].length)) {
-    alert('All sentences are already annotated for ' + theoriesToRun.map(t => t.toUpperCase()).join(', ') + '.'); return;
+  if (theoriesToRun.every(t => !targets[t].length)) {
+    alert('Nothing to annotate: all selected theories are complete or skipped.'); return;
+  }
+
+  // Check that the loaded model's context window holds the longest request of this run
+  if (lms) {
+    try { await fetchLMSModels(true); } catch(e) {}
+    const mid = getActiveModel(), info = lmsModelInfo[mid];
+    if (info && info.loaded && info.ctx) {
+      let need = 0, needT = '';
+      const B = parseInt(document.getElementById('batchSizeSelect')?.value) || 3;
+      for (const t of theoriesToRun) {
+        if (!targets[t].length) continue;
+        const last = targets[t][Math.max(0, targets[t].length - B)];
+        const chars = (THEORY_PROMPTS[t] || '').length + JSON.stringify(FEW_SHOT[t] || FEW_SHOT.t4).length +
+          buildReadingContext(t, last).length + 900 + B * 400;
+        const tok = Math.ceil(chars / 3.5) + 400 + 80 * B;   // prompt estimate + answer budget
+        if (tok > need) { need = tok; needT = t.toUpperCase(); }
+      }
+      if (need > info.ctx) {
+        const rec = Math.ceil(need * 1.25 / 4096) * 4096;
+        const ans = await askChoice(
+          'The model is loaded with a context window of ' + info.ctx.toLocaleString('en-US') + ' tokens, but the longest request of this run (' + needT +
+          ', end of the story) needs about ' + need.toLocaleString('en-US') + ' tokens.\n\n' +
+          'Requests late in the story would lose the beginning of the story or the instructions, and the model then often gives no usable answer.\n\n' +
+          'Fix: in LM Studio, eject the model and load it again with Context Length ' + rec.toLocaleString('en-US') + ' or more' +
+          (info.maxCtx ? ' (this model supports up to ' + info.maxCtx.toLocaleString('en-US') + ')' : '') + '.',
+          [{ key: 'cancel', label: 'Cancel run', primary: true }, { key: 'go', label: 'Run anyway' }]);
+        if (ans !== 'go') return;
+      }
+    }
   }
 
   annotCancelled = false;
@@ -1262,10 +1341,14 @@ async function runAnnotation() {
   runStats = { n: 0, ms: 0, out: 0, reasoning: 0 };
   const btn = document.getElementById('annotateBtn');
   btn.innerHTML = '<span class="spinner"></span> Cancel';
-  btn.onclick = () => { annotCancelled = true; btn.disabled = true; };
+  btn.onclick = () => {
+    annotCancelled = true;
+    btn.innerHTML = 'Stopping…'; btn.disabled = true;
+    try { activeRequestCtrl?.abort(); } catch(e) {}   // stop the running request at once
+  };
 
   document.getElementById('progressBar').classList.add('active');
-  setProgress(0, theoriesToRun[0].toUpperCase() + ' · waiting for the first answer (a model that is not loaded yet is loaded first)');
+  setProgress(0, (theoriesToRun.find(t => targets[t].length) || theoriesToRun[0]).toUpperCase() + ' · waiting for the first answer (a model that is not loaded yet is loaded first)');
   startProgressTimer();
   document.getElementById('apiStatus').textContent = 'Running…';
   document.getElementById('apiStatus').className   = 'loading';
@@ -1275,9 +1358,10 @@ async function runAnnotation() {
 
   for (const theory of theoriesToRun) {
     if (annotCancelled) break;
+    if (!targets[theory].length) continue;          // complete or skipped
     const previousRun = runInfo[theory];
     runInfo[theory] = currentRunSettings(theory);
-    if (scope === 'missing' && previousRun) {
+    if (scopeOf[theory] === 'missing' && previousRun) {
       runInfo[theory].resumed = true;
       runInfo[theory].previous = previousRun;   // settings of the run(s) that produced the earlier annotations
     }
@@ -1376,45 +1460,61 @@ async function annotateTheory(theory, targetIdx, onBatchDone) {
   const fewShotBlock = "EXAMPLE OUTPUT (use this exact JSON shape — never reproduce sentence text):\n" +
     JSON.stringify(examples) + "\n\n---\n";
 
-  for (let k = 0; k < targetIdx.length; k += BATCH) {
-    if (annotCancelled) return;
-    const idxs  = targetIdx.slice(k, k + BATCH);
-    const i     = idxs[0];                       // reading context = everything before the first sentence
+  // One request (up to `tries` attempts) for the sentences at indices idxs; returns the usable items
+  const requestItems = async (idxs, tries) => {
     const batch = idxs.map(j => sentences[j]);
-
     // Input formatted as JSON array so model can see the id fields clearly
     const inputJSON = JSON.stringify(
       batch.map(s => ({ id: s.id, sentence: s.text,
         reader_suspense_level: null, character_anxiety_level: null,
         character: "", suspense_element: "" }))
     );
-
     // Context comes first so consecutive requests share a growing prefix (LM Studio can reuse its cache)
-    const userMsg = fewShotBlock + buildReadingContext(theory, i) +
+    const userMsg = fewShotBlock + buildReadingContext(theory, idxs[0]) +
       "Now annotate EVERY sentence in this JSON input, reading them in order: each sentence follows the story so far " +
       "and the input sentences before it. Replace every null with a number from 0 to 5. " +
       "Keep the output minimal: suspense_element at most 6 words; character a name or empty; " +
       "if both levels are 0, leave character and suspense_element empty. No explanations. " +
       "Return ONLY a JSON array with one object per sentence, using the exact IDs shown. " +
       "INPUT:\n" + inputJSON + "\n\nJSON ARRAY OUTPUT:";
-
-    // Up to 3 attempts; an answer without numeric levels counts as a failed attempt
     const batchIds = new Set(batch.map(s => s.id));
     let items = [];
-    for (let attempt = 0; attempt < 3 && !annotCancelled; attempt++) {
+    // An answer without numeric levels counts as a failed attempt
+    for (let attempt = 0; attempt < tries && !annotCancelled; attempt++) {
       try {
         const raw = await callLLM(userMsg, sys, 400 + 80 * batch.length);
         if (lastUsage) { runStats.n++; runStats.ms += lastUsage.ms; runStats.out += lastUsage.out || 0; runStats.reasoning += lastUsage.reasoning || 0;
           if (lastUsage.ttft != null) { runStats.ttftN = (runStats.ttftN || 0) + 1; runStats.ttft = (runStats.ttft || 0) + lastUsage.ttft; runStats.tps = (runStats.tps || 0) + (lastUsage.tps || 0); } }
         items = extractJSONArray(raw).filter(it => batchIds.has(Number(it.id)) && hasLevels(it));
         if (items.length) break;
-        console.warn('Theory ' + theory + ' batch ' + i + ' attempt ' + (attempt+1) + ': no usable levels', (raw||'').substring(0, 200));
+        console.warn('Theory ' + theory + ' sentence ' + idxs[0] + ' attempt ' + (attempt+1) + ': no usable levels', (raw||'').substring(0, 200));
       } catch(e) {
-        console.warn('Theory ' + theory + ' batch ' + i + ' attempt ' + (attempt+1) + ':', e.message);
-        document.getElementById('apiStatus').textContent = (attempt < 2 ? 'Retry… ' : 'Err: ') + e.message.substring(0, 60);
+        console.warn('Theory ' + theory + ' sentence ' + idxs[0] + ' attempt ' + (attempt+1) + ':', e.message);
+        document.getElementById('apiStatus').textContent = (attempt < tries - 1 ? 'Retry… ' : 'Err: ') + e.message.substring(0, 60);
         document.getElementById('apiStatus').className = 'loading';
       }
+      if (annotCancelled) break;
       await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+    }
+    // keep one item per id
+    const seen = new Set();
+    return items.filter(it => { const id = Number(it.id); if (seen.has(id)) return false; seen.add(id); return true; });
+  };
+
+  for (let k = 0; k < targetIdx.length; k += BATCH) {
+    if (annotCancelled) return;
+    const idxs  = targetIdx.slice(k, k + BATCH);
+    const i     = idxs[0];                       // reading context = everything before the first sentence
+    const batch = idxs.map(j => sentences[j]);
+
+    let items = await requestItems(idxs, 3);
+    // Sentences the model skipped inside a batch are asked again one at a time
+    if (idxs.length > 1) {
+      for (const j of idxs) {
+        if (annotCancelled) break;
+        if (items.some(it => Number(it.id) === sentences[j].id)) continue;
+        items = items.concat(await requestItems([j], 2));
+      }
     }
 
     for (const item of items) {
@@ -1748,9 +1848,37 @@ function getAnnotatedTheories(sentId) {
 const CHART_THEORIES = [
   { key:'t1', label:'T1 Uncertainty',     hue:210 },
   { key:'t2', label:'T2 Desire-Frust.',   hue:160 },
-  { key:'t3', label:'T3 Absence Uncert.', hue:30  },
+  { key:'t3', label:'T3 Anomalous',       hue:30  },
   { key:'t4', label:'T4 Casual Reader',   hue:310 }
 ];
+
+// Human gold values per theory, aligned to the current sentences (cached until text or gold changes)
+let goldChartCache = null;
+function getGoldSeries() {
+  if (!sentences.length || (!goldWorkbook && !goldData)) return null;
+  const key = goldFileName + '|' + sentences.length + '|' + (sentences[0]?.text || '') + '|' + (document.getElementById('evalTheorySelect')?.value || '');
+  if (goldChartCache && goldChartCache.key === key) return goldChartCache.series;
+  const series = {};
+  const add = (t, rows) => {
+    const m = {};
+    matchGoldToModel(rows).forEach(x => { if (x.modelSentId !== null) m[x.modelSentId] = { r: x.goldRow.reader_level, c: x.goldRow.char_level }; });
+    series[t] = m;
+  };
+  try {
+    if (goldWorkbook) {
+      ['t1','t2','t3','t4'].forEach(t => {
+        const sheet = goldWorkbook.SheetNames.find(n => n.toLowerCase().startsWith(t));
+        if (sheet) add(t, parseGoldRows(XLSX.utils.sheet_to_json(goldWorkbook.Sheets[sheet], { defval: '' })));
+      });
+    } else if (goldData) {
+      // a single-sheet CSV gold file applies to the theory chosen in the Evaluation tab (or to all)
+      const sel = document.getElementById('evalTheorySelect')?.value || 'all';
+      (sel === 'all' ? ['t1','t2','t3','t4'] : [sel]).forEach(t => add(t, goldData));
+    }
+  } catch (e) { console.warn('Gold series for chart failed:', e); return null; }
+  goldChartCache = { key, series };
+  return series;
+}
 
 function movingAvg(arr, w) {
   return arr.map((_,i) => {
@@ -1789,6 +1917,10 @@ function renderChart() {
   g.append('text').attr('transform','rotate(-90)').attr('x',-iH/2).attr('y',-34).attr('text-anchor','middle').attr('fill','var(--text-muted)').attr('font-size',10).attr('font-family','JetBrains Mono,monospace').text('Suspense Level (0-5)');
   g.append('text').attr('x',iW/2).attr('y',iH+40).attr('text-anchor','middle').attr('fill','var(--text-muted)').attr('font-size',10).attr('font-family','JetBrains Mono,monospace').text('Narrative Progress (%)');
   // Build data
+  const gold = getGoldSeries();
+  const hasGold = !!gold && Object.keys(gold).length > 0;
+  const bl = document.getElementById('baselineLabel');
+  if (bl) bl.textContent = hasGold ? 'Human gold (dashed)' : 'Human baseline';
   const sentData = sentences.map((s,i)=>{
     const ann = annotations[s.id]||{};
     const x   = (i/(n-1||1))*100;
@@ -1799,12 +1931,15 @@ function renderChart() {
       row[t.key+'_c']  = ta?.char_level      ?? null;
       row[t.key+'_ch'] = ta?.character       ?? '';
       row[t.key+'_el'] = ta?.element         ?? '';
+      const gv = gold?.[t.key]?.[s.id];
+      row[t.key+'_gr'] = gv ? gv.r : null;
+      row[t.key+'_gc'] = gv ? gv.c : null;
     });
     return row;
   });
   const tt = document.getElementById('chartTooltip');
   // Human baseline (dashed)
-  if (showBaseline) {
+  if (showBaseline && !hasGold) {
     const lg = d3.line().x(d=>xS(d.x)).y(d=>yS(d.base)).defined(d=>d.base>0).curve(d3.curveMonotoneX);
     g.append('path').datum(sentData).attr('fill','none').attr('stroke',chartFg(.18)).attr('stroke-width',1.5).attr('stroke-dasharray','5,4').attr('d',lg);
   }
@@ -1815,7 +1950,6 @@ function renderChart() {
     const c = `hsl(${t.hue},65%,60%)`, cf = `hsla(${t.hue},65%,60%,.22)`;
     const rk=t.key+'_r', ck=t.key+'_c', chk2=t.key+'_ch';
     const valid = sentData.filter(d=>d[rk]!==null);
-    if (!valid.length) return;
     const lgFn = d3.line().x(d=>xS(d.x)).y(d=>yS(d[rk]??0)).defined(d=>d[rk]!==null).curve(d3.curveStepAfter);
     // Area fill
     const ag = d3.area().x(d=>xS(d.x)).y0(iH).y1(d=>yS(d[rk]??0)).defined(d=>d[rk]!==null).curve(d3.curveStepAfter);
@@ -1829,7 +1963,19 @@ function renderChart() {
     } else {
       g.append('path').datum(sentData).attr('fill','none').attr('stroke',c).attr('stroke-width',2).attr('d',lgFn);
     }
-    // Character dots
+    // Human gold of this theory: same color, dashed
+    if (showBaseline && hasGold && sentData.some(d=>d[t.key+'_gr']!==null)) {
+      const gk = t.key+'_gr';
+      if (showSmooth) {
+        const gy = movingAvg(sentData.map(d=>d[gk]),7);
+        const gd = sentData.map((d,i)=>({...d,gy:gy[i]}));
+        g.append('path').datum(gd).attr('fill','none').attr('stroke',c).attr('stroke-width',2).attr('stroke-dasharray','7,5').attr('opacity',.95)
+          .attr('d',d3.line().x(d=>xS(d.x)).y(d=>yS(d.gy??0)).defined(d=>d.gy!==null).curve(d3.curveMonotoneX));
+      } else {
+        g.append('path').datum(sentData).attr('fill','none').attr('stroke',c).attr('stroke-width',1.8).attr('stroke-dasharray','7,5').attr('opacity',.95)
+          .attr('d',d3.line().x(d=>xS(d.x)).y(d=>yS(d[gk]??0)).defined(d=>d[gk]!==null).curve(d3.curveStepAfter));
+      }
+    }
     // Character dots
 	if (showDots) {
   	  const dotD = valid.filter(d=>(d[ck]??0)>0);
@@ -1860,8 +2006,8 @@ function renderChart() {
       const vis = CHART_THEORIES.filter(t=>{const chk=document.getElementById('chk'+t.key.charAt(0).toUpperCase()+t.key.slice(1));return chk?.checked&&d[t.key+'_r']!==null;});
       let h=`<div style="font-style:italic;color:var(--text-muted);margin-bottom:5px;border-left:2px solid var(--border);padding-left:7px;font-family:'Source Serif 4',serif;font-size:.72rem">[${d.id}] ${d.text.substring(0,65)}${d.text.length>65?'…':''}</div>`;
       h+=`<div style="display:flex;gap:8px;margin-bottom:2px"><span style="color:var(--text-muted);min-width:56px">Progress</span><span>${d.x.toFixed(1)}%</span></div>`;
-      if(showBaseline&&d.base>0)h+=`<div style="display:flex;gap:8px"><span style="color:var(--text-muted);min-width:56px">Human</span><b>${d.base}</b></div>`;
-      vis.forEach(t=>{const rl=d[t.key+'_r']??'—',cl=d[t.key+'_c']??0,ch=d[t.key+'_ch']||'';h+=`<div style="display:flex;gap:8px"><span style="color:hsl(${t.hue},65%,62%);min-width:56px">${t.label.split(' ')[0]}</span><b>${rl}</b>${cl>0?' · '+ch+' <b>'+cl+'</b>':''}</div>`;});
+      if(showBaseline&&!hasGold&&d.base>0)h+=`<div style="display:flex;gap:8px"><span style="color:var(--text-muted);min-width:56px">Human</span><b>${d.base}</b></div>`;
+      vis.forEach(t=>{const rl=d[t.key+'_r']??'—',cl=d[t.key+'_c']??0,ch=d[t.key+'_ch']||'',gr=d[t.key+'_gr'];h+=`<div style="display:flex;gap:8px"><span style="color:hsl(${t.hue},65%,62%);min-width:56px">${t.label.split(' ')[0]}</span><b>${rl}</b>${cl>0?' · '+ch+' <b>'+cl+'</b>':''}</div>`+(hasGold&&gr!==null&&gr!==undefined?`<div style="display:flex;gap:8px"><span style="min-width:56px"></span><span style="color:var(--text-muted)">human gold</span><b>${(+gr).toFixed(Number.isInteger(+gr)?0:2)}</b></div>`:'');});
       tt.innerHTML=h;tt.style.display='block';tt.style.left=(ev.clientX+14)+'px';tt.style.top=(ev.clientY-10)+'px';
       requestAnimationFrame(()=>{const r=tt.getBoundingClientRect();if(r.right>window.innerWidth-10)tt.style.left=(ev.clientX-r.width-14)+'px';});
       document.getElementById('chartSentPreview').textContent='['+d.id+']  '+d.text;
@@ -1915,56 +2061,136 @@ function exportChartPNG() {
 
 function exportChartHTML() {
   if (!sentences.length) { alert('No data to export.'); return; }
-  const activeT = CHART_THEORIES.filter(t=>document.getElementById('chk'+t.key.charAt(0).toUpperCase()+t.key.slice(1))?.checked).map(t=>t.key);
-  const chartData = sentences.map((s,i)=>{
-    const ann=annotations[s.id]||{};
-    const row={id:s.id,x:(i/(sentences.length-1||1))*100,text:s.text,base:ann.reader_level||0};
-    CHART_THEORIES.forEach(t=>{row[t.key]=ann.theories?.[t.key]?.reader_level??null;});
+  const chkOn = id => !!document.getElementById(id)?.checked;
+  const activeT = CHART_THEORIES.filter(t => chkOn('chk' + t.key.charAt(0).toUpperCase() + t.key.slice(1))).map(t => t.key);
+  const n = sentences.length;
+  const gold = getGoldSeries();
+  const rows = sentences.map((s, i) => {
+    const ann = annotations[s.id] || {};
+    const row = { id: s.id, x: (i / (n - 1 || 1)) * 100, text: s.text, base: ann.reader_level || 0 };
+    CHART_THEORIES.forEach(t => {
+      const ta = ann.theories?.[t.key];
+      row[t.key + '_r']  = ta?.reader_level ?? null;
+      row[t.key + '_c']  = ta?.char_level ?? null;
+      row[t.key + '_ch'] = ta?.character ?? '';
+      row[t.key + '_el'] = ta?.element ?? '';
+      const gv = gold?.[t.key]?.[s.id];
+      row[t.key + '_gr'] = gv ? gv.r : null;
+    });
     return row;
   });
-  const infoLine = runInfoLine(activeT).replace(/--/g,'- -');
+  const payload = {
+    rows, theories: CHART_THEORIES, active: activeT,
+    options: { smooth: chkOn('chkSmooth'), dots: chkOn('chkCharDots'), baseline: chkOn('chkBaseline') },
+    colors: { bg: cssVar('--bg'), surface: cssVar('--surface2'), text: cssVar('--text'), muted: cssVar('--text-muted'),
+              dim: cssVar('--text-dim'), border: cssVar('--border'), fg: cssVar('--chart-fg') },
+    title: (docAuthor ? docAuthor + ', ' : '') + (docTitle || 'Suspense curve'),
+    info: runInfoLine(activeT)
+  };
+  const data = JSON.stringify(payload).replace(/</g, '\\u003c');   // safe inside <script>
   const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-  const html=`<!-- ${infoLine} -->
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>SuspenseLens Chart${docAuthor?' — '+docAuthor:''}</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"><\/script>
-<style>body{background:${cssVar('--bg')};color:${cssVar('--text')};font-family:'JetBrains Mono',monospace;margin:0;display:flex;flex-direction:column;height:100vh}
-h1{font-family:Georgia,serif;font-size:1rem;font-weight:400;padding:12px 20px 0;color:${cssVar('--text')}}
-.sub{font-size:.62rem;color:${cssVar('--text-muted')};padding:2px 20px 8px;letter-spacing:.06em}
-#c{flex:1;overflow:hidden;padding:10px 20px 4px}
-</style></head><body>
-<h1>${docAuthor?'<em>'+docAuthor+'</em>, ':''}${docTitle||'Suspense Curve'}</h1>
-<div class="sub">${esc(infoLine)}</div>
-<div id="c"></div>
-<script>
-const D=${JSON.stringify(chartData)};
-const T=${JSON.stringify(CHART_THEORIES.filter(t=>activeT.includes(t.key)))};
+  const html = '<!-- ' + payload.info.replace(/--/g, '- -') + ' -->\n' +
+'<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n' +
+'<title>SuspenseLens Chart — ' + esc(payload.title) + '</title>\n' +
+'<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"><\/script>\n' +
+'<style>\n' +
+'body{background:' + payload.colors.bg + ';color:' + payload.colors.text + ';font-family:"JetBrains Mono",ui-monospace,monospace;margin:0;display:flex;flex-direction:column;height:100vh}\n' +
+'h1{font-family:Georgia,serif;font-size:1rem;font-weight:400;margin:0;padding:12px 20px 0}\n' +
+'.sub{font-size:.62rem;color:' + payload.colors.muted + ';padding:4px 20px 6px;line-height:1.5}\n' +
+'.ctl{display:flex;flex-wrap:wrap;gap:14px;padding:4px 20px 6px;font-size:.68rem;border-bottom:1px solid ' + payload.colors.border + '}\n' +
+'.ctl label{display:flex;align-items:center;gap:4px;cursor:pointer}\n' +
+'#c{flex:1;min-height:320px;padding:8px 20px 0;position:relative}\n' +
+'#tt{position:fixed;display:none;pointer-events:none;z-index:10;background:' + payload.colors.surface + ';border:1px solid ' + payload.colors.border + ';border-radius:6px;padding:8px 10px;font-size:.68rem;max-width:340px;box-shadow:0 6px 24px rgba(0,0,0,.25)}\n' +
+'#detail{border-top:1px solid ' + payload.colors.border + ';padding:8px 20px 12px;font-size:.72rem;min-height:3.2em;line-height:1.55}\n' +
+'#detail .s{font-family:Georgia,serif;font-size:.85rem;font-style:italic;margin-bottom:4px}\n' +
+'</style></head><body>\n' +
+'<h1>' + esc(payload.title) + '</h1>\n<div class="sub">' + esc(payload.info) + '</div>\n' +
+'<div class="ctl" id="ctl"></div>\n<div id="c"></div>\n<div id="tt"></div>\n' +
+'<div id="detail"><span style="color:' + payload.colors.muted + '">Hover over the chart for details · click a point to show the full sentence here</span></div>\n' +
+'<script>\nconst P=' + data + ';\n' + CHART_EXPORT_SCRIPT + '\n<\/script></body></html>';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  a.download = (docTitle || 'SuspenseLens') + '_chart.html'; a.click();
+}
+
+// Standalone chart for the HTML export (same marks, hover and options as the in-app chart)
+const CHART_EXPORT_SCRIPT = String.raw`
+const D=P.rows, C=P.colors, fg=a=>'rgba('+C.fg+','+a+')';
+const HAS_GOLD=D.some(d=>P.theories.some(t=>d[t.key+'_gr']!==null&&d[t.key+'_gr']!==undefined));
+const fmtG=v=>(+v).toFixed(Number.isInteger(+v)?0:2);
+const state={smooth:P.options.smooth,dots:P.options.dots,baseline:P.options.baseline,on:{}};
+P.theories.forEach(t=>{state.on[t.key]=P.active.includes(t.key);});
+const ctl=document.getElementById('ctl');
+function box(label,checked,color,fn){const l=document.createElement('label');const i=document.createElement('input');i.type='checkbox';i.checked=checked;i.onchange=()=>{fn(i.checked);draw();};l.appendChild(i);const s=document.createElement('span');s.textContent=label;if(color)s.style.color=color;l.appendChild(s);ctl.appendChild(l);}
+P.theories.forEach(t=>{if(D.some(d=>d[t.key+'_r']!==null||(d[t.key+'_gr']!==null&&d[t.key+'_gr']!==undefined)))box(t.label,state.on[t.key],'hsl('+t.hue+',65%,52%)',v=>state.on[t.key]=v);});
+box('Smooth',state.smooth,null,v=>state.smooth=v);
+box('Character dots',state.dots,null,v=>state.dots=v);
+if(HAS_GOLD)box('Human gold (dashed)',state.baseline,null,v=>state.baseline=v);else if(D.some(d=>d.base>0))box('Human baseline',state.baseline,null,v=>state.baseline=v);
+function movingAvg(arr,w){return arr.map((_,i)=>{const sl=arr.slice(Math.max(0,i-Math.floor(w/2)),Math.min(arr.length,i+Math.ceil(w/2))).filter(v=>v!==null);return sl.length?sl.reduce((a,b)=>a+b,0)/sl.length:null;});}
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+function showDetail(d){const vis=P.theories.filter(t=>state.on[t.key]&&d[t.key+'_r']!==null);
+  let h='<div class="s">['+d.id+'] '+esc(d.text)+'</div>';
+  vis.forEach(t=>{const cl=d[t.key+'_c']||0;h+='<div><b style="color:hsl('+t.hue+',65%,48%)">'+t.label+'</b> reader '+d[t.key+'_r']+(cl>0?' · '+esc(d[t.key+'_ch']||'character')+' '+cl:'')+(d[t.key+'_el']?' · <i>'+esc(d[t.key+'_el'])+'</i>':'')+'</div>';});
+  if(HAS_GOLD&&state.baseline)vis.forEach(t=>{const g=d[t.key+'_gr'];if(g!==null&&g!==undefined)h+='<div><b style="color:hsl('+t.hue+',65%,48%)">'+t.label+'</b> human gold '+fmtG(g)+'</div>';});
+  else if(state.baseline&&d.base>0)h+='<div><b>Human</b> '+d.base+'</div>';
+  document.getElementById('detail').innerHTML=h;}
 function draw(){
-  const el=document.getElementById('c');el.innerHTML='';
-  const W=el.clientWidth||900,H=el.clientHeight||380,m={top:26,right:32,bottom:44,left:44};
-  const iW=W-m.left-m.right,iH=H-m.top-m.bottom,n=D.length;
-  const svg=d3.select(el).append('svg').attr('width',W).attr('height',H);
-  const g=svg.append('g').attr('transform','translate('+m.left+','+m.top+')');
-  const xS=d3.scaleLinear().domain([0,100]).range([0,iW]);
-  const yS=d3.scaleLinear().domain([0,5]).range([iH,0]);
+  const el=document.getElementById('c');el.innerHTML='';const tt=document.getElementById('tt');
+  const W=el.clientWidth||900,H=el.clientHeight||380,mg={top:28,right:36,bottom:46,left:46};
+  const iW=W-mg.left-mg.right-40,iH=H-mg.top-mg.bottom,n=D.length;
+  const svg=d3.select(el).append('svg').attr('width',W-40).attr('height',H).style('overflow','visible');
+  const g=svg.append('g').attr('transform','translate('+mg.left+','+mg.top+')');
+  const xS=d3.scaleLinear().domain([0,100]).range([0,iW]),yS=d3.scaleLinear().domain([0,5]).range([iH,0]);
   [[0,1,.03],[1,2,.05],[2,3,.07],[3,4,.09],[4,5,.11]].forEach(([y0,y1,a])=>g.append('rect').attr('x',0).attr('width',iW).attr('y',yS(y1)).attr('height',yS(y0)-yS(y1)).attr('fill','rgba(59,130,246,'+a+')'));
-  g.append('g').call(d3.axisLeft(yS).ticks(5).tickSize(-iW).tickFormat('')).selectAll('line,path').attr('stroke','${cssVar('--border')}');
-  g.append('g').attr('transform','translate(0,'+iH+')').call(d3.axisBottom(xS).ticks(10).tickFormat(d=>d+'%')).selectAll('text,line,path').attr('stroke','${cssVar('--text-muted')}').attr('fill','${cssVar('--text-muted')}');
-  g.append('g').call(d3.axisLeft(yS).ticks(5)).selectAll('text,line,path').attr('stroke','${cssVar('--text-muted')}').attr('fill','${cssVar('--text-muted')}');
-  const baseL=d3.line().x(d=>xS(d.x)).y(d=>yS(d.base)).defined(d=>d.base>0).curve(d3.curveMonotoneX);
-  g.append('path').datum(D).attr('fill','none').attr('stroke','${chartFg(.25)}').attr('stroke-width',1.5).attr('stroke-dasharray','5,4').attr('d',baseL);
-  T.forEach(t=>{
-    const c='hsl('+t.hue+',65%,60%)';
-    const lg=d3.line().x(d=>xS(d.x)).y(d=>yS(d[t.key]??0)).defined(d=>d[t.key]!==null).curve(d3.curveStepAfter);
-    g.append('path').datum(D).attr('fill','none').attr('stroke',c).attr('stroke-width',2).attr('d',lg);
+  g.append('g').call(d3.axisLeft(yS).ticks(5).tickSize(-iW).tickFormat('')).selectAll('line,path').attr('stroke',C.border);
+  g.append('g').attr('transform','translate(0,'+iH+')').call(d3.axisBottom(xS).ticks(10).tickFormat(d=>d+'%')).call(a=>{a.selectAll('line,path').attr('stroke',C.muted);a.selectAll('text').attr('fill',C.muted);});
+  g.append('g').call(d3.axisLeft(yS).ticks(5)).call(a=>{a.selectAll('line,path').attr('stroke',C.muted);a.selectAll('text').attr('fill',C.muted);});
+  g.append('text').attr('transform','rotate(-90)').attr('x',-iH/2).attr('y',-34).attr('text-anchor','middle').attr('fill',C.muted).attr('font-size',10).text('Suspense level (0–5)');
+  g.append('text').attr('x',iW/2).attr('y',iH+40).attr('text-anchor','middle').attr('fill',C.muted).attr('font-size',10).text('Narrative progress (%)');
+  if(state.baseline&&!HAS_GOLD){const lg=d3.line().x(d=>xS(d.x)).y(d=>yS(d.base)).defined(d=>d.base>0).curve(d3.curveMonotoneX);g.append('path').datum(D).attr('fill','none').attr('stroke',fg(.3)).attr('stroke-width',1.5).attr('stroke-dasharray','5,4').attr('d',lg);}
+  P.theories.forEach(t=>{
+    if(!state.on[t.key])return;
+    const c='hsl('+t.hue+',65%,55%)',cf='hsla('+t.hue+',65%,55%,.22)',rk=t.key+'_r',ck=t.key+'_c',chk=t.key+'_ch';
+    const valid=D.filter(d=>d[rk]!==null);
+    const lgFn=d3.line().x(d=>xS(d.x)).y(d=>yS(d[rk]??0)).defined(d=>d[rk]!==null).curve(d3.curveStepAfter);
+    g.append('path').datum(D).attr('fill','hsla('+t.hue+',65%,55%,.06)').attr('d',d3.area().x(d=>xS(d.x)).y0(iH).y1(d=>yS(d[rk]??0)).defined(d=>d[rk]!==null).curve(d3.curveStepAfter));
+    if(state.smooth){const sy=movingAvg(D.map(d=>d[rk]),7);const sd=D.map((d,i)=>Object.assign({},d,{sy:sy[i]}));
+      g.append('path').datum(D).attr('fill','none').attr('stroke',cf).attr('stroke-width',1).attr('d',lgFn);
+      g.append('path').datum(sd).attr('fill','none').attr('stroke',c).attr('stroke-width',2.5).attr('d',d3.line().x(d=>xS(d.x)).y(d=>yS(d.sy??0)).defined(d=>d.sy!==null).curve(d3.curveMonotoneX));
+    } else g.append('path').datum(D).attr('fill','none').attr('stroke',c).attr('stroke-width',2).attr('d',lgFn);
+    const gk=t.key+'_gr';
+    if(state.baseline&&HAS_GOLD&&D.some(d=>d[gk]!==null&&d[gk]!==undefined)){
+      if(state.smooth){const gy=movingAvg(D.map(d=>d[gk]??null),7);const gd=D.map((d,i)=>Object.assign({},d,{gy:gy[i]}));
+        g.append('path').datum(gd).attr('fill','none').attr('stroke',c).attr('stroke-width',2).attr('stroke-dasharray','7,5').attr('d',d3.line().x(d=>xS(d.x)).y(d=>yS(d.gy??0)).defined(d=>d.gy!==null).curve(d3.curveMonotoneX));}
+      else g.append('path').datum(D).attr('fill','none').attr('stroke',c).attr('stroke-width',1.8).attr('stroke-dasharray','7,5').attr('d',d3.line().x(d=>xS(d.x)).y(d=>yS(d[gk]??0)).defined(d=>d[gk]!==null&&d[gk]!==undefined).curve(d3.curveStepAfter));}
+    if(state.dots){const dd=valid.filter(d=>(d[ck]??0)>0);
+      g.selectAll('.dot-'+t.key).data(dd).enter().append('circle').attr('cx',d=>xS(d.x)).attr('cy',d=>yS(d[ck])).attr('r',d=>3+(d[ck]||0)*1.4).attr('fill',c).attr('fill-opacity',.75).attr('stroke',C.bg).attr('stroke-width',1.5);
+      g.selectAll('.lbl-'+t.key).data(dd.filter(d=>(d[ck]||0)>=3)).enter().append('text').attr('x',d=>xS(d.x)).attr('y',d=>yS(d[ck])-10).attr('text-anchor','middle').attr('font-size',8).attr('fill',c).text(d=>(d[chk]||'').charAt(0).toUpperCase());}
   });
+  D.map(d=>Object.assign({},d,{mx:Math.max(...P.theories.filter(t=>state.on[t.key]).map(t=>d[t.key+'_r']??0),state.baseline?d.base:0)}))
+   .sort((a,b)=>b.mx-a.mx).slice(0,5).filter(d=>d.mx>=3).forEach(d=>{
+    g.append('circle').attr('cx',xS(d.x)).attr('cy',yS(d.mx)).attr('r',4).attr('fill','none').attr('stroke',fg(.45)).attr('stroke-width',1.5).attr('pointer-events','none');
+    g.append('text').attr('x',xS(d.x)).attr('y',yS(d.mx)-8).attr('text-anchor','middle').attr('font-size',8).attr('fill',fg(.55)).attr('pointer-events','none').text(d.id);});
+  g.selectAll('.hit').data(D).enter().append('rect')
+   .attr('x',(d,i)=>{const p=i>0?xS(D[i-1].x):0;return(xS(d.x)+p)/2;})
+   .attr('width',(d,i)=>{const p=i>0?xS(D[i-1].x):0,nx=i<n-1?xS(D[i+1].x):iW;return Math.max(1,(xS(d.x)+nx)/2-(xS(d.x)+p)/2);})
+   .attr('y',0).attr('height',iH).attr('fill','transparent').style('cursor','pointer')
+   .on('mousemove',(ev,d)=>{
+     const vis=P.theories.filter(t=>state.on[t.key]&&(d[t.key+'_r']!==null||(d[t.key+'_gr']!==null&&d[t.key+'_gr']!==undefined)));
+     let h='<div style="font-style:italic;color:'+C.muted+';margin-bottom:5px;border-left:2px solid '+C.border+';padding-left:7px;font-family:Georgia,serif;font-size:.74rem">['+d.id+'] '+esc(d.text.substring(0,90))+(d.text.length>90?'…':'')+'</div>';
+     h+='<div style="display:flex;gap:8px"><span style="color:'+C.muted+';min-width:58px">Progress</span><span>'+d.x.toFixed(1)+'%</span></div>';
+     if(state.baseline&&!HAS_GOLD&&d.base>0)h+='<div style="display:flex;gap:8px"><span style="color:'+C.muted+';min-width:58px">Human</span><b>'+d.base+'</b></div>';
+     vis.forEach(t=>{const cl=d[t.key+'_c']??0,ch=d[t.key+'_ch']||'',gr=d[t.key+'_gr'];h+='<div style="display:flex;gap:8px"><span style="color:hsl('+t.hue+',65%,50%);min-width:58px">'+t.label.split(' ')[0]+'</span><b>'+(d[t.key+'_r']??'—')+'</b>'+(cl>0?' · '+esc(ch)+' <b>'+cl+'</b>':'')+'</div>'+(HAS_GOLD&&gr!==null&&gr!==undefined?'<div style="display:flex;gap:8px"><span style="min-width:58px"></span><span style="color:'+C.muted+'">human gold</span><b>'+fmtG(gr)+'</b></div>':'');
+       if(d[t.key+'_el'])h+='<div style="color:'+C.muted+';padding-left:66px;font-size:.62rem">'+esc(d[t.key+'_el'])+'</div>';});
+     tt.innerHTML=h;tt.style.display='block';tt.style.left=(ev.clientX+14)+'px';tt.style.top=(ev.clientY-10)+'px';
+     requestAnimationFrame(()=>{const r=tt.getBoundingClientRect();if(r.right>innerWidth-10)tt.style.left=(ev.clientX-r.width-14)+'px';if(r.bottom>innerHeight-10)tt.style.top=(innerHeight-r.height-10)+'px';});
+     svg.selectAll('.hl').remove();
+     g.append('line').attr('class','hl').attr('x1',xS(d.x)).attr('x2',xS(d.x)).attr('y1',0).attr('y2',iH).attr('stroke',fg(.3)).attr('stroke-width',1).attr('pointer-events','none');})
+   .on('mouseleave',()=>{tt.style.display='none';svg.selectAll('.hl').remove();})
+   .on('click',(_,d)=>showDetail(d));
 }
-window.addEventListener('DOMContentLoaded',draw);
-window.addEventListener('resize',draw);
-<\/script></body></html>`;
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));
-  a.download=(docTitle||'SuspenseLens')+'_chart.html';a.click();
-}
+window.addEventListener('DOMContentLoaded',draw);window.addEventListener('resize',draw);
+`;
 
 // ══════════════════════════════════════════════════════════════════════
 // FILTERS
@@ -2000,7 +2226,7 @@ function toggleTheory(theory, btn) {
                                 : (activeTheories.add(theory),    btn.classList.add('active'));
     if (!activeTheories.size) { activeTheories.add('all'); document.querySelector('[data-theory="all"]').classList.add('active'); }
   }
-  renderReader();
+  renderReader(); updateStats();
 }
 
 function filterLevel(level, el) {
@@ -2062,8 +2288,12 @@ function updateStats() {
   document.getElementById('statSent').textContent = sentences.length;
   const annotated = Object.values(annotations).filter(a => a.reader_level>0 || Object.keys(a.theories||{}).length>0).length;
   document.getElementById('statAnnot').textContent = annotated;
-  const levels = Object.values(annotations).map(a=>a.reader_level||0);
-  if (levels.length) {
+  // Average and peak of the reader-suspense levels of the selected theories (all theories if none is selected)
+  const sel = activeTheories.has('all') ? ['t1','t2','t3','t4'] : [...activeTheories].filter(t => t !== 'all');
+  const levels = Object.values(annotations).flatMap(a =>
+    sel.map(t => a.theories?.[t]?.reader_level).filter(v => v !== undefined && v !== null));
+  if (!levels.length) { document.getElementById('statAvg').textContent = '—'; document.getElementById('statPeak').textContent = '—'; }
+  else {
     document.getElementById('statAvg').textContent  = (levels.reduce((a,b)=>a+b,0)/levels.length).toFixed(1);
     document.getElementById('statPeak').textContent = Math.max(...levels);
   }
@@ -2203,6 +2433,8 @@ function loadGoldAnnotation(event) {
       document.getElementById('goldSlot').style.borderColor = 'var(--ok)';
       document.getElementById('goldSlot').style.color = 'var(--ok)';
       checkEvalReady();
+      goldChartCache = null;
+      if (currentView === 'chart') renderChart();
     } catch(err) {
       setGoldStatus('Error: ' + err.message, 'error');
     }
@@ -2302,7 +2534,7 @@ function sentenceSim(normA, normB) {
   const wordsB = normB.split(' ').filter(w=>w.length>2).length;
   // For short sentences (< 5 words) also use LCS
   if (wordsA < 5 || wordsB < 5) {
-    const lcs = lcsLen(normA, normB) / Math.max(wordsA, wordsB, 1);
+    const lcs = lcsLen(normA, normB) / Math.max(normA.split(' ').length, normB.split(' ').length, 1);
     return Math.max(jacc, lcs);
   }
   return jacc;
@@ -2726,7 +2958,7 @@ function renderEvalResults(results, theoryKey, matchResult) {
     // Sentence-level comparison
     if (r.perSent?.length) {
       const sorted = [...r.perSent].sort((a,b)=>b.absDiff-a.absDiff);
-      html += `<details style="margin-bottom:12px"><summary style="font-family:'JetBrains Mono',monospace;font-size:.63rem;color:var(--text-muted);cursor:pointer;text-transform:uppercase;letter-spacing:.08em;padding:6px 0">▶ Sentence-Level Comparison — Sorted by Error Size</summary>
+      html += `<details style="margin-bottom:12px"><summary style="font-family:'JetBrains Mono',monospace;font-size:.63rem;color:var(--text-muted);cursor:pointer;text-transform:uppercase;letter-spacing:.08em;padding:6px 0">▶ ${tm.label} · Sentence-Level Comparison (gold sheet ${r.theoryKey.toUpperCase()}) — Sorted by Error Size</summary>
       <div style="overflow-x:auto;margin-top:10px"><table style="border-collapse:collapse;width:100%;font-size:.68rem">
       <thead><tr style="background:var(--surface2)">
         <th style="padding:5px 8px;border:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--text-muted)">Gold ID</th>
